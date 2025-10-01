@@ -106,7 +106,7 @@ Security:
   - ANSI escape sequences in input are sanitized
   - Regex operations have timeout protection
 
-For more information, see: https://github.com/Open-Technology-Foundation/md2ansi
+For more information, see: https://github.com/Open-Technology-Foundation/md2ansi.bash
 EOT
   exit "${1:-0}"
 }
