@@ -1,37 +1,54 @@
 #!/usr/bin/env bash
 # Extract links from markdown files
 set -euo pipefail
+shopt -s inherit_errexit shift_verbose extglob nullglob
 
-if (($#==0)) || [[ $1 == '-h' || $1 == '--help' ]]; then
-  >&2 echo "Usage: $(basename "$0") <markdown_file>"
-  exit 1
-fi
-
-if [[ ! -f "$1" ]]; then
-  >&2 echo "$(basename "$0"): error: File '$1' not found."
-  exit 1
-fi
+SCRIPT_NAME=$(basename -- "$(readlink -en -- "$0")")
+readonly -- SCRIPT_NAME
 
 # Function to remove UTM parameters from URLs
 remove_utm() {
   sed -E 's/\?utm_[^=]+=([^&]*)$//' |
   sed -E 's/(\?|&)utm_[^=]+=([^&]*)(&|$)/\1/g' |
   sed -E 's/(\?|&)$//'
+  return 0
 }
 
-# Extract all types of links and process them
-{ # Extract inline links [text](url)
-  grep -o -E '\[.*?\]\(.*?\)' -- "$1" | sed -E 's/\[(.*?)\]\((.*?)\)/\2/'
+main() {
+  local -a Files=()
+  local -- file Refs ref url
 
-  # Extract bare URLs <http://example.com>
-  grep -o -E '<https?://[^>]+>' -- "$1" | sed -E 's/<(https?:\/\/[^>]+)>/\1/'
+  if (($#==0)) || [[ $1 == '-h' || $1 == '--help' ]]; then
+    echo "Usage: $SCRIPT_NAME file [file...]"
+    echo 'Extract links from text/markdown files'
+    exit 0
+  fi
 
-  # Extract reference-style links
-  refs=$(grep -o -E '\[.*?\]\[.*?\]' -- "$1" | sed -E 's/\[(.*?)\]\[(.*?)\]/\2/')
-  for ref in $refs; do
-    url=$(grep -E "^\[$ref\]:" -- "$1" | sed -E 's/\[.*?\]:\s*(.*)/\1/')
-    [[ -n "$url" ]] && echo "$url"
+  Files=($@)
+  for file in "${Files[@]}"; do
+    if [[ ! -f "$file" ]]; then
+      >&2 echo "$SCRIPT_NAME: error: File '$file' not found."
+      exit 1
+    fi
+
+    # Extract all types of links and process them
+    { # Extract inline links [text](url)
+      grep -o -E '\[.*?\]\(.*?\)' -- "$file" | sed -E 's/\[(.*?)\]\((.*?)\)/\2/' || true
+
+      # Extract bare URLs <http://example.com>
+      grep -o -E '<https?://[^>]+>' -- "$file" | sed -E 's/<(https?:\/\/[^>]+)>/\1/' || true
+
+      # Extract reference-style links
+      Refs=$(grep -o -E '\[.*?\]\[.*?\]' -- "$file" | sed -E 's/\[(.*?)\]\[(.*?)\]/\2/') || true
+      while IFS= read -r ref; do
+        [[ -n "$ref" ]] || continue
+        url=$(grep -E "^\[$ref\]:" -- "$file" | sed -E 's/\[.*?\]:\s*(.*)/\1/') || true
+        [[ -z "$url" ]] || echo "$url"
+      done <<< "$Refs"
+    } | remove_utm | sort | uniq
   done
-} | remove_utm | sort | uniq
 
+}
+
+main "$@"
 #fin

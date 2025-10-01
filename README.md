@@ -7,8 +7,6 @@
 
 A **zero-dependency Bash implementation** of md2ansi that converts Markdown to ANSI-colored terminal output.
 
-**Repository**: https://github.com/Open-Technology-Foundation/md2ansi.bash
-
 ## Overview
 
 This is a pure Bash implementation of the md2ansi markdown-to-ANSI formatter, designed to be compatible with the [Python version](https://github.com/Open-Technology-Foundation/md2ansi) while following Bash best practices and the project's coding standards.
@@ -19,10 +17,10 @@ This is a pure Bash implementation of the md2ansi markdown-to-ANSI formatter, de
 
 | Script | Purpose | Lines | Usage |
 |--------|---------|-------|-------|
-| **md2ansi** | Main converter executable | ~270 | `./md2ansi [OPTIONS] file.md` |
-| **md** | Pagination wrapper with less | ~13 | `./md file.md` |
-| **display-ansi-palette** | ANSI color palette viewer | ~72 | `./display-ansi-palette` |
-| **md-link-extract** | Extract links from markdown | ~38 | `./md-link-extract file.md` |
+| **md2ansi** | Main converter executable | ~270 | `md2ansi [OPTIONS] file.md` |
+| **md** | Pagination wrapper with less | ~13 | `md file.md` |
+| **display-ansi-palette** | ANSI color palette viewer | ~72 | `display-ansi-palette` |
+| **md-link-extract** | Extract links from markdown | ~38 | `md-link-extract file.md` |
 
 ### Library Modules
 
@@ -87,19 +85,19 @@ cd md2ansi.bash
 chmod +x md2ansi md display-ansi-palette md-link-extract
 
 # Test it
-./md2ansi --version
-./md2ansi README.md
+md2ansi --version
+md2ansi README.md
 ```
 
-### System-wide Installation (Optional)
+### System-wide Installation
 
 ```bash
 # Create symlinks in /usr/local/bin
-sudo ln -s "$(pwd)/md2ansi" /usr/local/bin/md2ansi-bash
-sudo ln -s "$(pwd)/md" /usr/local/bin/md-bash
+sudo ln -s "$(pwd)/md2ansi" /usr/local/bin/md2ansi
+sudo ln -s "$(pwd)/md" /usr/local/bin/md
 
 # Now you can use it from anywhere
-md2ansi-bash file.md
+md2ansi file.md
 md-bash file.md  # With pagination
 ```
 
@@ -109,17 +107,17 @@ md-bash file.md  # With pagination
 
 ```bash
 # View a markdown file
-./md2ansi README.md
+md2ansi README.md
 
 # With pagination (recommended for long files)
-./md README.md
+md README.md
 
 # Process multiple files
-./md2ansi file1.md file2.md file3.md
+md2ansi file1.md file2.md file3.md
 
 # Process from stdin
-cat README.md | ./md2ansi
-echo "# Hello **World**" | ./md2ansi
+cat README.md | md2ansi
+echo "# Hello **World**" | md2ansi
 ```
 
 ### Utility Scripts
@@ -128,8 +126,8 @@ echo "# Hello **World**" | ./md2ansi
 The `md` script wraps `md2ansi` with `less` for comfortable viewing of long markdown files:
 
 ```bash
-./md README.md              # View with pagination
-./md documentation/*.md     # Browse multiple files
+md README.md              # View with pagination
+md documentation/*.md     # Browse multiple files
 ```
 
 Uses optimized `less` flags: `-FXRS` (auto-exit if one screen, no init, raw control chars, no line wrapping)
@@ -138,7 +136,7 @@ Uses optimized `less` flags: `-FXRS` (auto-exit if one screen, no init, raw cont
 View all 256 ANSI colors supported by your terminal:
 
 ```bash
-./display-ansi-palette      # Display color palette with codes
+display-ansi-palette      # Display color palette with codes
 ```
 
 Output includes:
@@ -155,8 +153,8 @@ Useful for:
 Extract and list all URLs from markdown files:
 
 ```bash
-./md-link-extract README.md              # Extract all links
-./md-link-extract docs/*.md | sort -u    # Deduplicated links from multiple files
+md-link-extract README.md              # Extract all links
+md-link-extract docs/*.md | sort -u    # Deduplicated links from multiple files
 ```
 
 Features:
@@ -170,26 +168,26 @@ Features:
 
 ```bash
 # Force specific terminal width
-./md2ansi --width 100 README.md
-./md2ansi -w 80 file.md
+md2ansi --width 100 README.md
+md2ansi -w 80 file.md
 
 # Enable debug mode (output to stderr)
-./md2ansi --debug README.md 2>debug.log
-./md2ansi -D file.md
+md2ansi --debug README.md 2>debug.log
+md2ansi -D file.md
 
 # Disable specific features
-./md2ansi --no-tables --no-syntax-highlight doc.md
-./md2ansi --no-footnotes README.md
+md2ansi --no-tables --no-syntax-highlight doc.md
+md2ansi --no-footnotes README.md
 
 # Plain text mode (all formatting disabled)
-./md2ansi --plain README.md
-./md2ansi -t file.md
+md2ansi --plain README.md
+md2ansi -t file.md
 
 # Show version
-./md2ansi --version
+md2ansi --version
 
 # Show help
-./md2ansi --help
+md2ansi --help
 ```
 
 ## Architecture
@@ -310,16 +308,16 @@ All tools are standard and available on any modern Linux system:
 ./test/test_tables.sh
 
 # Manual testing
-echo -e "# Test\n\nThis is **bold** text." | ./md2ansi
+echo -e "# Test\n\nThis is **bold** text." | md2ansi
 
 # Test with real README
-./md README.md
+md README.md
 
 # Test color support
-./display-ansi-palette
+display-ansi-palette
 
 # Test link extraction
-./md-link-extract README.md
+md-link-extract README.md
 ```
 
 ### Test Coverage
@@ -358,7 +356,7 @@ echo "# Big Header
 
 This is **bold**, *italic*, and ***bold italic*** text.
 
-This is ~~strikethrough~~ and \`inline code\`." | ./md2ansi
+This is ~~strikethrough~~ and \`inline code\`." | md2ansi
 ```
 
 ### Lists
@@ -373,7 +371,7 @@ echo "- Item 1
    1. Nested numbered
 
 - [ ] Todo
-- [x] Done" | ./md2ansi
+- [x] Done" | md2ansi
 ```
 
 ### Tables
@@ -391,7 +389,7 @@ Tables support alignment (left, center, right) and inline formatting within cell
 ```bash
 echo "| Left | Center | Right |
 |:-----|:------:|------:|
-| A    | B      | C     |" | ./md2ansi
+| A    | B      | C     |" | md2ansi
 ```
 
 ### Code Blocks
@@ -399,7 +397,7 @@ echo "| Left | Center | Right |
 echo "\`\`\`python
 def hello():
     print('world')
-\`\`\`" | ./md2ansi
+\`\`\`" | md2ansi
 ```
 
 ## Development
@@ -418,13 +416,13 @@ def hello():
 
 ```bash
 # Enable debug output (to stderr)
-./md2ansi -D file.md 2>debug.log
+md2ansi -D file.md 2>debug.log
 
 # View debug output
 cat debug.log
 
 # Debug with real-time output
-./md2ansi -D file.md 2>&1 | grep 'DEBUG'
+md2ansi -D file.md 2>&1 | grep 'DEBUG'
 ```
 
 Debug output includes:
@@ -456,7 +454,7 @@ echo $TERM
 
 # Try forcing 256-color mode
 export TERM=xterm-256color
-./md2ansi README.md
+md2ansi README.md
 ```
 
 ### Issue: Script not found
@@ -486,10 +484,10 @@ ls -l md2ansi md
 
 ```bash
 # Disable all formatting
-./md2ansi --plain file.md
+md2ansi --plain file.md
 
 # Check for conflicting ANSI codes in input
-./md2ansi --debug file.md 2>&1 | grep -i sanitiz
+md2ansi --debug file.md 2>&1 | grep -i sanitiz
 ```
 
 ## Contributing
@@ -515,7 +513,7 @@ shellcheck md2ansi lib/*.sh test/*.sh
 
 # 3. Test changes
 ./test/test_basic.sh
-./md2ansi README.md
+md2ansi README.md
 
 # 4. Create checkpoint backup
 checkpoint -q
