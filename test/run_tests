@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# Test suite for md2ansi Bash implementation
+# Simple, safe testing framework with no external dependencies
+set -euo pipefail
+
+# Script metadata
+SCRIPT_PATH=$(readlink -en -- "$0")
+SCRIPT_DIR=${SCRIPT_PATH%/*}
+PROJECT_DIR=${SCRIPT_DIR%/*}
+readonly -- SCRIPT_PATH SCRIPT_DIR PROJECT_DIR
+
+# Test counters
+declare -i TESTS_RUN=0 TESTS_PASSED=0 TESTS_FAILED=0
+
+# Colors for output
+declare -- GREEN=$'\033[0;32m' RED=$'\033[0;31m' YELLOW=$'\033[0;33m'
+declare -- CYAN=$'\033[0;36m' NC=$'\033[0m'
+readonly -- GREEN RED YELLOW CYAN NC
+
+# --------------------------------------------------------------------------------
+# Test assertion functions
+
+assert_equals() {
+  local -- expected="$1"
+  local -- actual="$2"
+  local -- test_name="${3:-assertion}"
+
+  TESTS_RUN+=1
+
+  if [[ "$expected" == "$actual" ]]; then
+    TESTS_PASSED+=1
+    echo "${GREEN}✓${NC} $test_name"
+    return 0
+  else
+    TESTS_FAILED+=1
+    echo "${RED}✗${NC} $test_name"
+    echo "  Expected: $expected"
+    echo "  Actual:   $actual"
+    return 1
+  fi
+}
+
+assert_contains() {
+  local -- haystack="$1"
+  local -- needle="$2"
+  local -- test_name="${3:-assertion}"
+
+  TESTS_RUN+=1
+
+  if [[ $haystack == *"$needle"* ]]; then
+    TESTS_PASSED+=1
+    echo "${GREEN}✓${NC} $test_name"
+    return 0
+  else
+    TESTS_FAILED+=1
+    echo "${RED}✗${NC} $test_name"
+    echo "  Expected to contain: $needle"
+    echo "  In: $haystack"
+    return 1
+  fi
+}
+
+assert_not_empty() {
+  local -- value="$1"
+  local -- test_name="${2:-assertion}"
+
+  TESTS_RUN+=1
+
+  if [[ -n $value ]]; then
+    TESTS_PASSED+=1
+    echo "${GREEN}✓${NC} $test_name"
+    return 0
+  else
+    TESTS_FAILED+=1
+    echo "${RED}✗${NC} $test_name"
+    echo "  Expected non-empty value"
+    return 1
+  fi
+}
+
+assert_exit_code() {
+  local -i expected_code="$1"
+  local -- command="$2"
+  local -- test_name="${3:-assertion}"
+  local -i actual_code
+
+  TESTS_RUN+=1
+
+  # Run command and capture exit code
+  set +e
+  eval "$command" >/dev/null 2>&1
+  actual_code=$?
+  set -e
+
+  if ((expected_code == actual_code)); then
+    TESTS_PASSED+=1
+    echo "${GREEN}✓${NC} $test_name"
+    return 0
+  else
+    TESTS_FAILED+=1
+    echo "${RED}✗${NC} $test_name"
+    echo "  Expected exit code: $expected_code"
+    echo "  Actual exit code:   $actual_code"
+    return 1
+  fi
+}
+
+# --------------------------------------------------------------------------------
+# Test section headers
+
+test_section() {
+  echo ""
+  echo "${CYAN}=== $1 ===${NC}"
+  echo ""
+}
+
+# --------------------------------------------------------------------------------
+# Main test execution
+
+main() {
+  echo ""
+  echo "${YELLOW}╔════════════════════════════════════════════════════════════╗${NC}"
+  echo "${YELLOW}║         MD2ANSI Bash Implementation Test Suite            ║${NC}"
+  echo "${YELLOW}╔════════════════════════════════════════════════════════════╗${NC}"
+  echo ""
+
+  # Change to project directory
+  cd "$PROJECT_DIR"
+
+  # Source test files
+  local -- test_file
+  for test_file in "$SCRIPT_DIR"/test_*.sh; do
+    if [[ -f $test_file ]]; then
+      echo "${CYAN}Running: ${test_file##*/}${NC}"
+      # shellcheck disable=SC1090
+      source "$test_file"
+      echo ""
+    fi
+  done
+
+  # Print summary
+  echo ""
+  echo "${YELLOW}╔════════════════════════════════════════════════════════════╗${NC}"
+  echo "${YELLOW}║                       Test Summary                         ║${NC}"
+  echo "${YELLOW}╚════════════════════════════════════════════════════════════╝${NC}"
+  echo ""
+  echo "  Tests run:    $TESTS_RUN"
+  echo "  ${GREEN}Tests passed: $TESTS_PASSED${NC}"
+
+  if ((TESTS_FAILED > 0)); then
+    echo "  ${RED}Tests failed: $TESTS_FAILED${NC}"
+    echo ""
+    echo "${RED}FAILED${NC}"
+    return 1
+  else
+    echo ""
+    echo "${GREEN}ALL TESTS PASSED${NC}"
+    return 0
+  fi
+}
+
+main "$@"
+#fin

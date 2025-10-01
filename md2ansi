@@ -1,0 +1,276 @@
+#!/usr/bin/env bash
+#shellcheck disable=SC1090,SC1091
+# md2ansi: Convert Markdown to ANSI-colored text in the terminal
+# Bash implementation of md2ansi with zero external dependencies
+# Version: 0.9.6-bash
+set -euo pipefail
+shopt -s inherit_errexit shift_verbose extglob nullglob
+
+# --------------------------------------------------------------------------------
+# Script metadata
+VERSION='0.9.6-bash'
+SCRIPT_PATH=$(readlink -en -- "$0")
+SCRIPT_DIR=${SCRIPT_PATH%/*}
+SCRIPT_NAME=${SCRIPT_PATH##*/}
+readonly -- VERSION SCRIPT_PATH SCRIPT_DIR SCRIPT_NAME
+
+# --------------------------------------------------------------------------------
+# Global configuration
+declare -i VERBOSE=1
+declare -i DEBUG=0
+declare -i TERM_WIDTH=0  # 0 means auto-detect
+declare -i MAX_FILE_SIZE=$((10*1024*1024))  # 10MB limit
+declare -i MAX_LINE_LENGTH=100000  # Per-line limit for safety
+
+# Feature flags (associative array)
+declare -A OPTIONS=(
+  [footnotes]=1
+  [syntax_highlight]=1
+  [tables]=1
+  [task_lists]=1
+  [images]=1
+  [links]=1
+)
+
+# Input files array
+declare -a INPUT_FILES=()
+
+# State tracking for parsing
+declare -i IN_CODE_BLOCK=0
+declare -- CODE_FENCE_TYPE=''
+declare -- CODE_LANG=''
+declare -A FOOTNOTES=()
+declare -a FOOTNOTE_REFS=()
+
+# --------------------------------------------------------------------------------
+# Source required libraries in correct order
+source "$SCRIPT_DIR/lib/utils.sh"
+source "$SCRIPT_DIR/lib/ansi-colors.sh"
+source "$SCRIPT_DIR/lib/renderer.sh"
+source "$SCRIPT_DIR/lib/parser.sh"
+# parser.sh sources tables.sh internally
+
+# Install signal handlers
+install_signal_handlers
+
+# --------------------------------------------------------------------------------
+# Usage documentation
+usage() {
+  cat <<EOT
+$SCRIPT_NAME $VERSION - Convert Markdown to ANSI-colored terminal output
+
+A zero-dependency Bash implementation that renders markdown files with color
+and style directly in your terminal.
+
+Usage: $SCRIPT_NAME [OPTIONS] [file1.md [file2.md ...]]
+       cat README.md | $SCRIPT_NAME
+       curl -s https://example.com/file.md | $SCRIPT_NAME
+
+Options:
+  -h, --help              Show this help message and exit
+  -V, --version           Show version information and exit
+  -D, --debug             Enable debug mode with detailed traces (to stderr)
+  -w, --width WIDTH       Force specific terminal width (default: auto-detect)
+  -t, --plain             Plain text mode (disable all formatting)
+
+Feature Toggles:
+  --no-footnotes          Disable footnotes processing
+  --no-syntax-highlight   Disable syntax highlighting in code blocks
+  --no-tables             Disable table formatting
+  --no-task-lists         Disable task list (checkbox) formatting
+  --no-images             Disable image placeholders
+  --no-links              Disable link formatting
+
+Examples:
+  # View a markdown file with pager
+  $SCRIPT_NAME README.md | less -R
+
+  # Process multiple files
+  $SCRIPT_NAME *.md
+
+  # Process from stdin
+  cat doc.md | $SCRIPT_NAME
+
+  # Force specific width
+  $SCRIPT_NAME --width 100 README.md
+
+  # Disable specific features
+  $SCRIPT_NAME --no-tables --no-syntax-highlight doc.md
+
+  # Plain text mode (all formatting disabled)
+  $SCRIPT_NAME --plain README.md
+
+Security:
+  - Files larger than 10MB are rejected for safety
+  - Input from stdin is also limited to 10MB
+  - ANSI escape sequences in input are sanitized
+  - Regex operations have timeout protection
+
+For more information, see: https://github.com/Open-Technology-Foundation/md2ansi
+EOT
+  exit "${1:-0}"
+}
+
+# --------------------------------------------------------------------------------
+# Argument parsing
+
+parse_arguments() {
+  while (($#)); do
+    case "$1" in
+      -w|--width)
+        noarg "$@"
+        shift
+        TERM_WIDTH="$1"
+        [[ $TERM_WIDTH =~ ^[0-9]+$ ]] || die 22 "Invalid width: '$TERM_WIDTH'"
+        ((TERM_WIDTH >= 20 && TERM_WIDTH <= 500)) || die 22 "Width must be between 20 and 500"
+        ;;
+      -D|--debug)
+        DEBUG=1
+        ;;
+      -V|--version)
+        echo "$SCRIPT_NAME $VERSION"
+        exit 0
+        ;;
+      -h|--help)
+        usage 0
+        ;;
+      -t|--plain)
+        # Disable all formatting features
+        OPTIONS[footnotes]=0
+        OPTIONS[syntax_highlight]=0
+        OPTIONS[tables]=0
+        OPTIONS[task_lists]=0
+        OPTIONS[images]=0
+        OPTIONS[links]=0
+        ;;
+      --no-footnotes)
+        OPTIONS[footnotes]=0
+        ;;
+      --no-syntax-highlight)
+        OPTIONS[syntax_highlight]=0
+        ;;
+      --no-tables)
+        OPTIONS[tables]=0
+        ;;
+      --no-task-lists)
+        OPTIONS[task_lists]=0
+        ;;
+      --no-images)
+        OPTIONS[images]=0
+        ;;
+      --no-links)
+        OPTIONS[links]=0
+        ;;
+      -[wDVht]*)
+        # Split combined short options: -Dv -> -D -v
+        #shellcheck disable=SC2046
+        set -- '' $(printf -- "-%c " $(grep -o . <<<"${1:1}")) "${@:2}"
+        ;;
+      -*)
+        die 22 "Invalid option: '$1'"
+        ;;
+      *)
+        # Regular file argument
+        INPUT_FILES+=("$1")
+        ;;
+    esac
+    shift
+  done
+}
+
+# --------------------------------------------------------------------------------
+# File processing functions
+
+# Process a single file or stdin
+process_file() {
+  local -- filepath="${1:-}"
+  local -a lines=()
+  local -- content line
+
+  if [[ -n $filepath ]]; then
+    # Process file
+    debug "Processing file: $filepath"
+    validate_file_size "$filepath" "$MAX_FILE_SIZE"
+
+    # Read file into array, handling encoding issues
+    while IFS= read -r line || [[ -n $line ]]; do
+      # Skip shebang if first line
+      [[ ${#lines[@]} -eq 0 && $line =~ ^\#! ]] && continue
+      lines+=("$line")
+    done <"$filepath"
+  else
+    # Process stdin
+    debug "Processing stdin"
+    local -i byte_count=0
+    local -- chunk
+
+    # Read stdin with size limit
+    while IFS= read -r line || [[ -n $line ]]; do
+      byte_count+=${#line}
+      ((byte_count+=1))  # Account for newline
+
+      if ((byte_count > MAX_FILE_SIZE)); then
+        die 1 "Input from stdin exceeds maximum size: $MAX_FILE_SIZE bytes (10MB)"
+      fi
+
+      # Skip shebang if first line
+      [[ ${#lines[@]} -eq 0 && $line =~ ^\#! ]] && continue
+      lines+=("$line")
+    done
+  fi
+
+  debug "Read ${#lines[@]} lines"
+
+  # Process the markdown lines
+  parse_markdown lines
+}
+
+# Note: parse_markdown() is now provided by lib/parser.sh
+# Note: render_header() and other rendering functions are in lib/renderer.sh
+
+# --------------------------------------------------------------------------------
+# Main function
+
+main() {
+  local -i exitcode=0
+
+  # Parse command-line arguments
+  parse_arguments "$@"
+
+  # Determine terminal width
+  if ((TERM_WIDTH == 0)); then
+    TERM_WIDTH=$(get_terminal_width)
+  fi
+
+  debug "Terminal width: $TERM_WIDTH"
+  debug "Options: $(declare -p OPTIONS | sed 's/declare -A //')"
+
+  # Print initial reset to ensure clean terminal state
+  printf '%s' "$ANSI_RESET"
+
+  # Process files or stdin
+  if ((${#INPUT_FILES[@]} > 0)); then
+    local -- file
+    for file in "${INPUT_FILES[@]}"; do
+      process_file "$file"
+
+      # Add newline between files if processing multiple
+      if ((${#INPUT_FILES[@]} > 1)); then
+        echo ""
+      fi
+    done
+  else
+    # Read from stdin
+    process_file ""
+  fi
+
+  # Ensure terminal colors are reset at the end
+  printf '%s' "$ANSI_RESET"
+
+  return "$exitcode"
+}
+
+# --------------------------------------------------------------------------------
+# Script invocation
+main "$@"
+#fin
