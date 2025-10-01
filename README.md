@@ -45,8 +45,8 @@ This is a pure Bash implementation of the md2ansi markdown-to-ANSI formatter, de
 ## Features
 
 ### Fully Implemented
-- ✅ **Headers** (H1-H6) with distinct color gradients
-- ✅ **Inline Formatting**:
+- ✓ **Headers** (H1-H6) with distinct color gradients
+- ✓ **Inline Formatting**:
   - Bold (`**text**`)
   - Italic (`*text*` or `_text_`)
   - Combined bold+italic (`***text***`)
@@ -54,27 +54,27 @@ This is a pure Bash implementation of the md2ansi markdown-to-ANSI formatter, de
   - Inline code (`` `code` ``)
   - Links (`[text](url)`)
   - Images (`![alt](url)`)
-- ✅ **Lists**:
+- ✓ **Lists**:
   - Unordered lists (`-` or `*`)
   - Ordered lists (`1.`, `2.`, etc.)
   - Task lists (`- [ ]` and `- [x]`)
   - Nested lists with proper indentation
-- ✅ **Tables**:
+- ✓ **Tables**:
   - Pipe-delimited tables with alignment support
   - Left, center, and right alignment
   - Inline formatting in cells
   - Proper borders and spacing
-- ✅ **Code Blocks**:
+- ✓ **Code Blocks**:
   - Fenced code blocks (` ``` ` and `~~~`)
   - Syntax highlighting for Python, JavaScript, and Bash
   - Language detection and aliases (py, js, sh)
-- ✅ **Blockquotes** (`>`)
-- ✅ **Horizontal Rules** (`---`, `===`, `___`)
-- ✅ **Footnotes** (`[^1]` references and `[^1]: text` definitions)
-- ✅ **ANSI-aware text wrapping**
-- ✅ **Terminal width auto-detection**
-- ✅ **Feature toggles** (--no-tables, --no-syntax-highlight, etc.)
-- ✅ **Security**: File size limits (10MB), input sanitization, ReDoS protection
+- ✓ **Blockquotes** (`>`)
+- ✓ **Horizontal Rules** (`---`, `===`, `___`)
+- ✓ **Footnotes** (`[^1]` references and `[^1]: text` definitions)
+- ✓ **ANSI-aware text wrapping**
+- ✓ **Terminal width auto-detection**
+- ✓ **Feature toggles** (--no-tables, --no-syntax-highlight, etc.)
+- ✓ **Security**: File size limits (10MB), input sanitization, ReDoS protection
 
 ## Installation
 
@@ -247,13 +247,13 @@ md2ansi.bash/
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Command-line arguments | ✅ Identical | All flags supported |
-| Feature toggles | ✅ Identical | Same --no-* options |
-| Output format | ✅ Compatible | Same colors & styling |
-| ANSI codes | ✅ Identical | Full SGR support |
-| File size limits | ✅ Same | 10MB maximum |
-| Test fixtures | ✅ Compatible | Shares test files |
-| Syntax highlighting | ⚠️ Simplified | Line-based patterns |
+| Command-line arguments | ✓ Identical | All flags supported |
+| Feature toggles | ✓ Identical | Same --no-* options |
+| Output format | ✓ Compatible | Same colors & styling |
+| ANSI codes | ✓ Identical | Full SGR support |
+| File size limits | ✓ Same | 10MB maximum |
+| Test fixtures | ✓ Compatible | Shares test files |
+| Syntax highlighting | ‼ Simplified | Line-based patterns |
 
 ## Coding Standards
 
@@ -343,10 +343,10 @@ echo -e "# Test\n\nThis is **bold** text." | ./md2ansi
 ### Performance Comparison
 
 ```
-Small files (<10KB):   ~100ms   ⚡ Fast
-Medium files (100KB):  ~500ms   ✓ Good
-Large files (1MB):     ~3-5s    ⚠️ Acceptable
-Very large (5-10MB):   ~15-30s  ⏱️ Slow but safe
+Small files (<10KB):   ~100ms   ● Fast
+Medium files (100KB):  ~500ms   ○ Good
+Large files (1MB):     ~3-5s    ◦ Acceptable
+Very large (5-10MB):   ~15-30s  ∘ Slow but safe
 ```
 
 ## Examples
@@ -382,11 +382,11 @@ Tables support alignment (left, center, right) and inline formatting within cell
 
 | Feature | Status | Notes |
 |:--------|:------:|------:|
-| **Headers** | ✅ | H1-H6 with colors |
-| *Emphasis* | ✅ | Bold & italic |
-| `Code` | ✅ | Inline code blocks |
-| Tables | ✅ | With alignment |
-| Links | ✅ | Clickable |
+| **Headers** | ✓ | H1-H6 with colors |
+| *Emphasis* | ✓ | Bold & italic |
+| `Code` | ✓ | Inline code blocks |
+| Tables | ✓ | With alignment |
+| Links | ✓ | Clickable |
 
 ```bash
 echo "| Left | Center | Right |
@@ -569,7 +569,7 @@ See [LICENSE](LICENSE) file for full text.
 
 ---
 
-**Status**: ✅ Core implementation complete and functional
+**Status**: ✓ Core implementation complete and functional
 
 **Version**: 0.9.6-bash
 
