@@ -235,6 +235,9 @@ _render_table_output() {
       # Apply inline formatting
       cell_text=$(colorize_line "$cell_text")
 
+      # Strip COLOR_TEXT codes that interfere with table rendering
+      cell_text="${cell_text//$COLOR_TEXT/}"
+
       # Align cell
       width=${_col_widths[i]}
       aligned_cell=$(_align_cell "$cell_text" "$width" "${_alignments[i]}")

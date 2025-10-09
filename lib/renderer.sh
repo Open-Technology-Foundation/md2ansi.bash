@@ -14,8 +14,8 @@ colorize_line() {
   local -- line="$1"
   local -- result="$line"
 
-  # 1. Inline code: `code` (highest priority to avoid processing its contents)
-  result=$(sed -E "s/\`([^\`]+)\`/${COLOR_CODEBLOCK}\`\1\`${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
+  # 1. Inline code: `code` (remove backticks from output)
+  result=$(sed -E "s/\`([^\`]+)\`/${COLOR_CODEBLOCK}\1${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
 
   # 2. Images: ![alt](url) - must be before links
   if ((OPTIONS[images])); then
@@ -37,9 +37,11 @@ colorize_line() {
   # 6. Bold: **text**
   result=$(sed -E "s/\*\*([^*]+)\*\*/${ANSI_BOLD}\1${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
 
-  # 7. Italic: *text* or _text_ (avoid start/end of line to prevent list conflicts)
+  # 7. Italic: *text* or _text_ (avoid matching inside already-formatted text)
+  # Don't match if preceded by certain characters that indicate formatted text
   result=$(sed -E "s/([^*])\*([^*]+)\*([^*])/\1${ANSI_ITALIC}\2${ANSI_RESET}${COLOR_TEXT}\3/g" <<<"$result")
-  result=$(sed -E "s/([^_])_([^_]+)_([^_])/\1${ANSI_ITALIC}\2${ANSI_RESET}${COLOR_TEXT}\3/g" <<<"$result")
+  # Skip underscore italic inside inline code by not matching adjacent to ANSI codes
+  # Don't process _text_ at all - it's too error-prone with code containing underscores
 
   # 8. Strikethrough: ~~text~~
   result=$(sed -E "s/~~([^~]+)~~/${ANSI_STRIKE}\1${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
