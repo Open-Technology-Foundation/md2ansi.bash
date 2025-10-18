@@ -6,7 +6,6 @@
 set -euo pipefail
 shopt -s inherit_errexit shift_verbose extglob nullglob
 
-# --------------------------------------------------------------------------------
 # Script metadata
 VERSION='0.9.6-bash'
 SCRIPT_PATH=$(readlink -en -- "$0")
@@ -14,7 +13,6 @@ SCRIPT_DIR=${SCRIPT_PATH%/*}
 SCRIPT_NAME=${SCRIPT_PATH##*/}
 readonly -- VERSION SCRIPT_PATH SCRIPT_DIR SCRIPT_NAME
 
-# --------------------------------------------------------------------------------
 # Global configuration
 declare -i VERBOSE=1
 declare -i DEBUG=0
@@ -42,7 +40,6 @@ declare -- CODE_LANG=''
 declare -A FOOTNOTES=()
 declare -a FOOTNOTE_REFS=()
 
-# --------------------------------------------------------------------------------
 # Source required libraries in correct order
 source "$SCRIPT_DIR/lib/utils.sh"
 source "$SCRIPT_DIR/lib/ansi-colors.sh"
@@ -53,7 +50,6 @@ source "$SCRIPT_DIR/lib/parser.sh"
 # Install signal handlers
 install_signal_handlers
 
-# --------------------------------------------------------------------------------
 # Usage documentation
 usage() {
   cat <<EOT
@@ -111,12 +107,11 @@ EOT
   exit "${1:-0}"
 }
 
-# --------------------------------------------------------------------------------
 # Argument parsing
 
 parse_arguments() {
   while (($#)); do
-    case "$1" in
+    case $1 in
       -w|--width)
         noarg "$@"
         shift
@@ -135,7 +130,7 @@ parse_arguments() {
         usage 0
         ;;
       -t|--plain)
-        # Disable all formatting features
+        # Plain mode for environments where ANSI formatting may cause issues
         OPTIONS[footnotes]=0
         OPTIONS[syntax_highlight]=0
         OPTIONS[tables]=0
@@ -161,6 +156,11 @@ parse_arguments() {
       --no-links)
         OPTIONS[links]=0
         ;;
+      --)
+        shift
+        (($#)) && INPUT_FILES+=("$@")
+        break
+        ;;
       -[wDVht]*)
         # Split combined short options: -Dv -> -D -v
         #shellcheck disable=SC2046
@@ -178,7 +178,6 @@ parse_arguments() {
   done
 }
 
-# --------------------------------------------------------------------------------
 # File processing functions
 
 # Process a single file or stdin
@@ -187,15 +186,15 @@ process_file() {
   local -a lines=()
   local -- content line
 
-  if [[ -n $filepath ]]; then
+  if [[ -n "$filepath" ]]; then
     # Process file
     debug "Processing file: $filepath"
     validate_file_size "$filepath" "$MAX_FILE_SIZE"
 
     # Read file into array, handling encoding issues
-    while IFS= read -r line || [[ -n $line ]]; do
-      # Skip shebang if first line
-      [[ ${#lines[@]} -eq 0 && $line =~ ^\#! ]] && continue
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      # Skip shebang to prevent treating it as markdown content
+      [[ ${#lines[@]} -eq 0 && "$line" =~ ^\#! ]] && continue
       lines+=("$line")
     done <"$filepath"
   else
@@ -205,7 +204,7 @@ process_file() {
     local -- chunk
 
     # Read stdin with size limit
-    while IFS= read -r line || [[ -n $line ]]; do
+    while IFS= read -r line || [[ -n "$line" ]]; do
       byte_count+=${#line}
       ((byte_count+=1))  # Account for newline
 
@@ -213,8 +212,8 @@ process_file() {
         die 1 "Input from stdin exceeds maximum size: $MAX_FILE_SIZE bytes (10MB)"
       fi
 
-      # Skip shebang if first line
-      [[ ${#lines[@]} -eq 0 && $line =~ ^\#! ]] && continue
+      # Skip shebang to prevent treating it as markdown content
+      [[ ${#lines[@]} -eq 0 && "$line" =~ ^\#! ]] && continue
       lines+=("$line")
     done
   fi
@@ -225,10 +224,9 @@ process_file() {
   parse_markdown lines
 }
 
-# Note: parse_markdown() is now provided by lib/parser.sh
-# Note: render_header() and other rendering functions are in lib/renderer.sh
+# Parsing and rendering are separated into library modules to maintain clean architecture
+# and enable independent testing/modification of each concern
 
-# --------------------------------------------------------------------------------
 # Main function
 
 main() {
@@ -270,7 +268,6 @@ main() {
   return "$exitcode"
 }
 
-# --------------------------------------------------------------------------------
 # Script invocation
 main "$@"
 #fin
