@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-#shellcheck disable=SC1090,SC1091
 # md2ansi: Convert Markdown to ANSI-colored text in the terminal
 # Bash implementation of md2ansi with zero external dependencies
 # Version: 0.9.6-bash
@@ -7,15 +6,12 @@ set -euo pipefail
 shopt -s inherit_errexit shift_verbose extglob nullglob
 
 # Script metadata
-VERSION='0.9.6-bash'
-SCRIPT_PATH=$(readlink -en -- "$0")
-SCRIPT_DIR=${SCRIPT_PATH%/*}
-SCRIPT_NAME=${SCRIPT_PATH##*/}
-readonly -- VERSION SCRIPT_PATH SCRIPT_DIR SCRIPT_NAME
+declare -r VERSION='0.9.6-bash'
+declare -r SCRIPT_PATH=$(realpath -e -- "$0")
+declare -r SCRIPT_DIR=${SCRIPT_PATH%/*} SCRIPT_NAME=${SCRIPT_PATH##*/}
 
 # Global configuration
-declare -i VERBOSE=1
-declare -i DEBUG=0
+declare -i VERBOSE=1 DEBUG=0
 declare -i TERM_WIDTH=0  # 0 means auto-detect
 declare -i MAX_FILE_SIZE=$((10*1024*1024))  # 10MB limit
 declare -i MAX_LINE_LENGTH=100000  # Per-line limit for safety
@@ -40,21 +36,14 @@ declare -- CODE_LANG=''
 declare -A FOOTNOTES=()
 declare -a FOOTNOTE_REFS=()
 
-# ================================================================================
-# Utility Functions (from lib/utils.sh)
-# ================================================================================
+## Utility Functions (from lib/utils.sh) ##
 
 # Message colors (independent of ANSI color library)
 if [[ -t 1 && -t 2 ]]; then
-  declare -- RED=$'\033[0;31m'
-  declare -- GREEN=$'\033[0;32m'
-  declare -- YELLOW=$'\033[0;33m'
-  declare -- CYAN=$'\033[0;36m'
-  declare -- NC=$'\033[0m'
+  declare -r NC=$'\033[0m' RED=$'\033[0;31m' GREEN=$'\033[0;32m' YELLOW=$'\033[0;33m' CYAN=$'\033[0;36m'
 else
-  declare -- RED='' GREEN='' YELLOW='' CYAN='' NC=''
+  declare -r NC='' RED='' GREEN='' YELLOW='' CYAN=''
 fi
-readonly -- RED GREEN YELLOW CYAN NC
 
 # --------------------------------------------------------------------------------
 # Core messaging functions
@@ -93,10 +82,7 @@ debug() {
 error() { >&2 _msg "$@"; }
 
 # Exit with error
-die() {
-  (($# > 1)) && error "${@:2}"
-  exit "${1:-0}"
-}
+die() { (($# > 1)) && error "${@:2}"; exit "${1:-0}"; }
 
 # --------------------------------------------------------------------------------
 # Terminal detection functions
@@ -146,11 +132,11 @@ validate_file_size() {
   local -i max_size="$2"
   local -i file_size
 
-  [[ -f "$filepath" ]] || die 1 "File not found: '$filepath'"
-  [[ -r "$filepath" ]] || die 1 "Cannot read file: '$filepath'"
+  [[ -f "$filepath" ]] || die 1 "File not found ${filepath@Q}"
+  [[ -r "$filepath" ]] || die 1 "Cannot read file: ${filepath@Q}"
 
   # Check if it's a directory
-  [[ -d "$filepath" ]] && die 1 "'$filepath' is a directory, not a file"
+  [[ -d "$filepath" ]] && die 1 "${filepath@Q} is a directory, not a file"
 
   # Get file size in bytes
   file_size=$(wc -c <"$filepath" 2>/dev/null || echo 0)
@@ -206,9 +192,7 @@ trim() {
 
 # Pluralization helper
 # Usage: echo "Found $count file$(s $count)"
-s() {
-  (( ${1:-1} == 1 )) || echo -n 's'
-}
+s() { (( ${1:-1} == 1 )) || echo -n 's'; }
 
 # --------------------------------------------------------------------------------
 # ReDoS protection using timeout command
@@ -216,13 +200,13 @@ s() {
 # Safe regex substitution with timeout
 # Usage: safe_regex_sub "pattern" "replacement" "text" [timeout_seconds]
 safe_regex_sub() {
-  local -- pattern="$1"
-  local -- replacement="$2"
-  local -- text="$3"
+  local -- pattern=$1
+  local -- replacement=$2
+  local -- text=$3
   local -i timeout="${4:-1}"
 
   # For simple patterns (short, no quantifiers), execute directly
-  if [[ ${#pattern} -lt 50 ]] && [[ ! $pattern =~ [\*\+\{\?] ]]; then
+  if ((${#pattern} < 50 )) && [[ ! $pattern =~ [\*\+\{\?] ]]; then
     sed "s/$pattern/$replacement/g" <<<"$text" 2>/dev/null || echo "$text"
     return $?
   fi
@@ -240,9 +224,7 @@ safe_regex_sub() {
 # --------------------------------------------------------------------------------
 # Display declared variables (debugging aid)
 # Usage: decp VAR1 VAR2
-decp() {
-  declare -p "$@" | sed 's/^declare -[a-zA-Z-]* //'
-}
+decp() { declare -p "$@" | sed 's/^declare -[a-zA-Z-]* //'; }
 
 # ================================================================================
 # ANSI Color Definitions (from lib/ansi-colors.sh)
@@ -268,69 +250,50 @@ readonly -- HAS_COLOR
 # Basic ANSI formatting codes
 if ((HAS_COLOR)); then
   # Use $'...' syntax for ANSI escape sequences
-  readonly -- ANSI_RESET=$'\033[0m'
-  readonly -- ANSI_BOLD=$'\033[1m'
-  readonly -- ANSI_DIM=$'\033[2m'
-  readonly -- ANSI_ITALIC=$'\033[3m'
-  readonly -- ANSI_UNDERLINE=$'\033[4m'
-  readonly -- ANSI_STRIKE=$'\033[9m'
+  declare -r  ANSI_RESET=$'\033[0m' \
+              ANSI_BOLD=$'\033[1m' \
+              ANSI_DIM=$'\033[2m' \
+              ANSI_ITALIC=$'\033[3m' \
+              ANSI_UNDERLINE=$'\033[4m' \
+              ANSI_STRIKE=$'\033[9m'
 
   # Header colors (H1-H6)
-  readonly -- COLOR_H1=$'\033[38;5;226m'  # Bright yellow
-  readonly -- COLOR_H2=$'\033[38;5;214m'  # Orange
-  readonly -- COLOR_H3=$'\033[38;5;118m'  # Green
-  readonly -- COLOR_H4=$'\033[38;5;21m'   # Blue
-  readonly -- COLOR_H5=$'\033[38;5;93m'   # Purple
-  readonly -- COLOR_H6=$'\033[38;5;239m'  # Dark gray
+              # Bright yellow | Orange | Green | Blue | Purple | Dark gray
+  declare -r  COLOR_H1=$'\033[38;5;226m' \
+              COLOR_H2=$'\033[38;5;214m' \
+              COLOR_H3=$'\033[38;5;118m' \
+              COLOR_H4=$'\033[38;5;21m' \
+              COLOR_H5=$'\033[38;5;93m' \
+              COLOR_H6=$'\033[38;5;239m'
 
   # Element colors
-  readonly -- COLOR_TEXT=$'\033[38;5;7m'        # Light gray
-  readonly -- COLOR_BLOCKQUOTE=$'\033[48;5;236m'  # Dark background
-  readonly -- COLOR_CODEBLOCK=$'\033[90m'       # Gray
-  readonly -- COLOR_LIST=$'\033[36m'            # Cyan
-  readonly -- COLOR_HR=$'\033[36m'              # Cyan
-  readonly -- COLOR_TABLE=$'\033[90m'           # Gray
-  readonly -- COLOR_LINK=$'\033[38;5;45m'       # Cyan-blue
+              # Light gray | Dark background | Gray | Cyan | Cyan | Gray | Cyan-blue
+  declare -r  COLOR_TEXT=$'\033[38;5;7m' \
+              COLOR_BLOCKQUOTE=$'\033[48;5;236m' \
+              COLOR_CODEBLOCK=$'\033[90m' \
+              COLOR_LIST=$'\033[36m' \
+              COLOR_HR=$'\033[36m' \
+              COLOR_TABLE=$'\033[90m' \
+              COLOR_LINK=$'\033[38;5;45m'
 
   # Syntax highlighting colors
-  readonly -- COLOR_KEYWORD=$'\033[38;5;204m'   # Pink
-  readonly -- COLOR_STRING=$'\033[38;5;114m'    # Green
-  readonly -- COLOR_NUMBER=$'\033[38;5;220m'    # Yellow
-  readonly -- COLOR_COMMENT=$'\033[38;5;245m'   # Gray
-  readonly -- COLOR_FUNCTION=$'\033[38;5;81m'   # Blue
-  readonly -- COLOR_CLASS=$'\033[38;5;214m'     # Orange
-  readonly -- COLOR_BUILTIN=$'\033[38;5;147m'   # Purple
+              # Pink | Green | Yellow | Gray | Blue | Orange| Purple
+  declare -r  COLOR_KEYWORD=$'\033[38;5;204m' \
+              COLOR_STRING=$'\033[38;5;114m' \
+              COLOR_NUMBER=$'\033[38;5;220m' \
+              COLOR_COMMENT=$'\033[38;5;245m' \
+              COLOR_FUNCTION=$'\033[38;5;81m' \
+              COLOR_CLASS=$'\033[38;5;214m' \
+              COLOR_BUILTIN=$'\033[38;5;147m'
 else
   # No color support - all empty strings
-  readonly -- ANSI_RESET=''
-  readonly -- ANSI_BOLD=''
-  readonly -- ANSI_DIM=''
-  readonly -- ANSI_ITALIC=''
-  readonly -- ANSI_UNDERLINE=''
-  readonly -- ANSI_STRIKE=''
+  declare -r ANSI_RESET='' ANSI_BOLD='' ANSI_DIM='' ANSI_ITALIC='' ANSI_UNDERLINE='' ANSI_STRIKE=''
 
-  readonly -- COLOR_H1=''
-  readonly -- COLOR_H2=''
-  readonly -- COLOR_H3=''
-  readonly -- COLOR_H4=''
-  readonly -- COLOR_H5=''
-  readonly -- COLOR_H6=''
+  declare -r COLOR_H1='' COLOR_H2='' COLOR_H3='' COLOR_H4='' COLOR_H5='' COLOR_H6=''
 
-  readonly -- COLOR_TEXT=''
-  readonly -- COLOR_BLOCKQUOTE=''
-  readonly -- COLOR_CODEBLOCK=''
-  readonly -- COLOR_LIST=''
-  readonly -- COLOR_HR=''
-  readonly -- COLOR_TABLE=''
-  readonly -- COLOR_LINK=''
+  declare -r COLOR_TEXT='' COLOR_BLOCKQUOTE='' COLOR_CODEBLOCK='' COLOR_LIST='' COLOR_HR='' COLOR_TABLE='' COLOR_LINK=''
 
-  readonly -- COLOR_KEYWORD=''
-  readonly -- COLOR_STRING=''
-  readonly -- COLOR_NUMBER=''
-  readonly -- COLOR_COMMENT=''
-  readonly -- COLOR_FUNCTION=''
-  readonly -- COLOR_CLASS=''
-  readonly -- COLOR_BUILTIN=''
+  declare -r COLOR_KEYWORD='' COLOR_STRING='' COLOR_NUMBER='' COLOR_COMMENT='' COLOR_FUNCTION='' COLOR_CLASS='' COLOR_BUILTIN=''
 fi
 
 # --------------------------------------------------------------------------------
@@ -347,9 +310,8 @@ strip_ansi() {
 # Get visible length of text (without ANSI codes)
 # Usage: visible_length "text with ANSI codes"
 visible_length() {
-  local -- text="$1"
   local -- stripped
-  stripped=$(strip_ansi "$text")
+  stripped=$(strip_ansi "$1")
   echo "${#stripped}"
 }
 
@@ -371,7 +333,7 @@ sanitize_ansi() {
 # Order matters: process code first, then images, links, then bold/italic/strike
 # Usage: colorize_line "markdown text"
 colorize_line() {
-  local -- line="$1"
+  local -- line=$1
   local -- result="$line"
 
   # 1. Inline code: `code` (remove backticks from output)
@@ -528,10 +490,10 @@ render_list_item() {
 # Render ordered list item
 # Usage: render_ordered_item "indent" "number" "content" term_width
 render_ordered_item() {
-  local -- indent="$1"
-  local -- number="$2"
-  local -- content="$3"
-  local -i term_width="$4"
+  local -- indent=$1
+  local -- number=$2
+  local -- content=$3
+  local -i term_width=$4
   local -i indent_level number_width
   local -- number_indent text_indent formatted_content
   local -a wrapped_lines
@@ -561,10 +523,10 @@ render_ordered_item() {
 # Render task list item (checkbox)
 # Usage: render_task_item "indent" "status" "content" term_width
 render_task_item() {
-  local -- indent="$1"
-  local -- status="$2"  # 'x' or ' '
-  local -- content="$3"
-  local -i term_width="$4"
+  local -- indent=$1
+  local -- status=$2  # 'x' or ' '
+  local -- content=$3
+  local -i term_width=$4
   local -i indent_level
   local -- bullet_indent text_indent checkbox formatted_content
   local -a wrapped_lines
@@ -773,7 +735,7 @@ render_table() {
 
   # Need at least 2 lines for a valid table (header + separator or header + data)
   if ((${#table_lines[@]} < 2)); then
-    warn "Invalid table: too few lines"
+    warn 'Invalid table: too few lines'
     return 1
   fi
 
@@ -1345,7 +1307,7 @@ parse_arguments() {
         noarg "$@"
         shift
         TERM_WIDTH="$1"
-        [[ $TERM_WIDTH =~ ^[0-9]+$ ]] || die 22 "Invalid width: '$TERM_WIDTH'"
+        [[ $TERM_WIDTH =~ ^[0-9]+$ ]] || die 22 "Invalid width ${TERM_WIDTH@Q}"
         ((TERM_WIDTH >= 20 && TERM_WIDTH <= 500)) || die 22 "Width must be between 20 and 500"
         ;;
       -D|--debug)
@@ -1396,7 +1358,7 @@ parse_arguments() {
         set -- '' $(printf -- "-%c " $(grep -o . <<<"${1:1}")) "${@:2}"
         ;;
       -*)
-        die 22 "Invalid option: '$1'"
+        die 22 "Invalid option ${1@Q}"
         ;;
       *)
         # Regular file argument
@@ -1465,9 +1427,7 @@ main() {
   parse_arguments "$@"
 
   # Determine terminal width
-  if ((TERM_WIDTH == 0)); then
-    TERM_WIDTH=$(get_terminal_width)
-  fi
+  ((TERM_WIDTH)) || TERM_WIDTH=$(get_terminal_width)
 
   debug "Terminal width: $TERM_WIDTH"
   debug "Options: $(declare -p OPTIONS | sed 's/declare -A //')"
@@ -1483,12 +1443,12 @@ main() {
 
       # Add newline between files if processing multiple
       if ((${#INPUT_FILES[@]} > 1)); then
-        echo ""
+        echo ''
       fi
     done
   else
     # Read from stdin
-    process_file ""
+    process_file ''
   fi
 
   # Ensure terminal colors are reset at the end
