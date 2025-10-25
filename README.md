@@ -17,20 +17,12 @@ This is a pure Bash implementation of the md2ansi markdown-to-ANSI formatter, de
 
 | Script | Purpose | Lines | Usage |
 |--------|---------|-------|-------|
-| **md2ansi** | Main converter executable | ~270 | `md2ansi [OPTIONS] file.md` |
+| **md2ansi** | Main converter (monolithic) | ~1,500 | `md2ansi [OPTIONS] file.md` |
 | **md** | Pagination wrapper with less | ~13 | `md file.md` |
 | **display-ansi-palette** | ANSI color palette viewer | ~72 | `display-ansi-palette` |
 | **md-link-extract** | Extract links from markdown | ~38 | `md-link-extract file.md` |
 
-### Library Modules
-
-| Module | Purpose | Lines | Key Functions |
-|--------|---------|-------|---------------|
-| **lib/ansi-colors.sh** | ANSI color constants & escapes | ~97 | Color definitions, SGR codes |
-| **lib/utils.sh** | Core utilities & validation | ~160 | `error`, `warn`, `debug`, `die`, `validate_file_size` |
-| **lib/renderer.sh** | Inline formatting engine | ~400 | `render_inline`, `wrap_text`, `highlight_syntax` |
-| **lib/parser.sh** | Block-level parser | ~220 | `parse_markdown`, `render_header`, `render_list` |
-| **lib/tables.sh** | Table parser & renderer | ~220 | `parse_table`, `render_table_row` |
+**Note:** As of version 0.9.6, `md2ansi` is a **monolithic script** with all functionality embedded in a single ~1,500 line file for zero-dependency installation.
 
 ### Test Suite
 
@@ -192,20 +184,15 @@ md2ansi --help
 
 ## Architecture
 
-The implementation follows the [Bash Coding Standard](https://github.com/Open-Technology-Foundation/bash-coding-standard) and is organized into modules:
+The implementation follows the [Bash Coding Standard](https://github.com/Open-Technology-Foundation/bash-coding-standard) and uses a **monolithic design** for zero-dependency installation:
 
 ```
 md2ansi.bash/
-├── md2ansi               # Main executable (~270 lines)
+├── md2ansi               # Monolithic executable (~1,500 lines)
+│                         # Contains all functionality in one file
 ├── md                    # Pagination wrapper (~13 lines)
 ├── display-ansi-palette  # Color palette viewer (~72 lines)
 ├── md-link-extract       # Link extractor utility (~38 lines)
-├── lib/
-│   ├── ansi-colors.sh    # ANSI constants and color utilities (~97 lines)
-│   ├── utils.sh          # Utilities, messaging, validation (~160 lines)
-│   ├── renderer.sh       # Inline formatting and rendering (~400 lines)
-│   ├── parser.sh         # Block-level parsing logic (~220 lines)
-│   └── tables.sh         # Table parsing and rendering (~220 lines)
 ├── test/
 │   ├── test_basic.sh     # Basic feature tests
 │   ├── test_code.sh      # Code block tests
@@ -215,18 +202,29 @@ md2ansi.bash/
 └── LICENSE               # GPL-3.0 license
 ```
 
-**Total: ~1,490 lines of code**
+**Total: ~1,500 lines in monolithic md2ansi**
 
-### Code Organization
+### Monolithic Design Benefits
 
-| Component | Responsibility |
-|-----------|----------------|
-| **md2ansi** | Main script with argument parsing and file processing |
-| **lib/ansi-colors.sh** | Color constants, ANSI utilities |
-| **lib/utils.sh** | Terminal detection, file validation, messaging, signal handling |
-| **lib/renderer.sh** | Inline formatting (bold, italic, links, etc.), text wrapping |
-| **lib/parser.sh** | Block-level parsing (headers, lists, code blocks, etc.) |
-| **lib/tables.sh** | Complex table parsing, alignment, and rendering |
+| Benefit | Description |
+|---------|-------------|
+| **Zero Installation Issues** | No broken paths or missing library dependencies |
+| **Single File Deployment** | Copy one file to `/usr/local/bin/` and it works |
+| **Faster Startup** | No overhead from sourcing multiple files |
+| **Simpler Debugging** | All code in one place for easy tracing |
+| **Clean Architecture** | Well-organized sections with clear markers |
+
+### Internal Code Organization (within md2ansi)
+
+| Section | Responsibility | Lines |
+|---------|----------------|-------|
+| **Script Header** | Shebang, metadata, global variables | 1-42 |
+| **Utility Functions** | Terminal detection, file validation, messaging, signal handling | 43-245 |
+| **ANSI Colors** | Color constants, ANSI utilities | 246-362 |
+| **Inline Rendering** | Bold, italic, links, text wrapping | 363-741 |
+| **Table Rendering** | Complex table parsing, alignment | 742-1040 |
+| **Block Parsing** | Headers, lists, code blocks, footnotes | 1041-1274 |
+| **Main Functions** | Argument parsing, file processing, main() | 1275-1502 |
 
 ## Key Differences from [Python Version](https://github.com/Open-Technology-Foundation/md2ansi)
 
@@ -237,7 +235,7 @@ md2ansi.bash/
 | **ReDoS Protection** | `timeout` command | multiprocessing |
 | **Syntax Highlighting** | Line-based regex | Token-based parsing |
 | **Performance** | ~2-3x slower | Baseline |
-| **Design** | Modular libraries | Single file |
+| **Design** | Monolithic (~1,500 lines) | Single file (~800 lines) |
 | **Error Handling** | trap + set -e | try/except |
 | **Dependencies** | Zero (only coreutils) | Python 3.7+ |
 
@@ -404,13 +402,22 @@ def hello():
 
 ### Adding New Features
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| **Block-level parsing** | `lib/parser.sh` | Headers, lists, code blocks, blockquotes |
-| **Inline formatting** | `lib/renderer.sh` | Bold, italic, links, inline code |
-| **Table support** | `lib/tables.sh` | Table parsing, alignment, rendering |
-| **Utilities** | `lib/utils.sh` | Validation, messaging, helpers |
-| **Colors** | `lib/ansi-colors.sh` | ANSI constants, color functions |
+Since md2ansi is monolithic, all edits are made directly to the `md2ansi` file. The code is organized into these clearly marked sections:
+
+| Component | Lines in md2ansi | Purpose |
+|-----------|------------------|---------|
+| **Block-level parsing** | 1041-1274 | Headers, lists, code blocks, blockquotes |
+| **Inline formatting** | 363-741 | Bold, italic, links, inline code |
+| **Table support** | 742-1040 | Table parsing, alignment, rendering |
+| **Utilities** | 43-245 | Validation, messaging, helpers |
+| **Colors** | 246-362 | ANSI constants, color functions |
+
+Each section is marked with clear header comments like:
+```bash
+# ================================================================================
+# Utility Functions (from lib/utils.sh)
+# ================================================================================
+```
 
 ### Debug Mode
 
@@ -506,10 +513,10 @@ md2ansi --debug file.md 2>&1 | grep -i sanitiz
 
 ```bash
 # 1. Make changes to code
-vim lib/renderer.sh
+vim md2ansi
 
 # 2. Run shellcheck
-shellcheck md2ansi lib/*.sh test/*.sh
+shellcheck md2ansi md test/*.sh
 
 # 3. Test changes
 ./test/test_basic.sh
@@ -550,11 +557,13 @@ See [LICENSE](LICENSE) file for full text.
 
 | Metric | Value |
 |--------|-------|
-| **Total Lines** | ~1,490 |
-| **Scripts** | 4 main + 5 libraries + 3 tests |
+| **Total Lines (md2ansi)** | ~1,500 (monolithic) |
+| **Scripts** | 4 main + 3 tests |
 | **Features** | 12+ markdown elements |
 | **Test Coverage** | Headers, formatting, lists, tables, code |
 | **Dependencies** | 0 (zero) |
+| **Installation** | Single-file copy |
+| **Architecture** | Monolithic single-file design |
 
 ---
 

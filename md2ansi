@@ -40,12 +40,1241 @@ declare -- CODE_LANG=''
 declare -A FOOTNOTES=()
 declare -a FOOTNOTE_REFS=()
 
-# Source required libraries in correct order
-source "$SCRIPT_DIR/lib/utils.sh"
-source "$SCRIPT_DIR/lib/ansi-colors.sh"
-source "$SCRIPT_DIR/lib/renderer.sh"
-source "$SCRIPT_DIR/lib/parser.sh"
-# parser.sh sources tables.sh internally
+# ================================================================================
+# Utility Functions (from lib/utils.sh)
+# ================================================================================
+
+# Message colors (independent of ANSI color library)
+if [[ -t 1 && -t 2 ]]; then
+  declare -- RED=$'\033[0;31m'
+  declare -- GREEN=$'\033[0;32m'
+  declare -- YELLOW=$'\033[0;33m'
+  declare -- CYAN=$'\033[0;36m'
+  declare -- NC=$'\033[0m'
+else
+  declare -- RED='' GREEN='' YELLOW='' CYAN='' NC=''
+fi
+readonly -- RED GREEN YELLOW CYAN NC
+
+# --------------------------------------------------------------------------------
+# Core messaging functions
+
+# Internal message function using FUNCNAME for context
+_msg() {
+  local -- prefix="${SCRIPT_NAME}:" msg
+  case "${FUNCNAME[1]}" in
+    success) prefix+=" ${GREEN}✓${NC}" ;;
+    warn)    prefix+=" ${YELLOW}⚡${NC}" ;;
+    info)    prefix+=" ${CYAN}◉${NC}" ;;
+    error)   prefix+=" ${RED}✗${NC}" ;;
+    debug)   prefix+=" ${YELLOW}DEBUG${NC}:" ;;
+    *) ;;
+  esac
+  for msg in "$@"; do
+    printf '%s %s\n' "$prefix" "$msg"
+  done
+}
+
+# Conditional output based on verbosity
+vecho()   { ((VERBOSE)) || return 0; _msg "$@"; }
+success() { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
+warn()    { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
+info()    { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
+
+# Debug output with timestamp
+debug() {
+  ((DEBUG)) || return 0
+  local -- timestamp
+  timestamp=$(date +%H:%M:%S.%3N 2>/dev/null || date +%H:%M:%S)
+  >&2 printf '[%s] [DEBUG] %s\n' "$timestamp" "$*"
+}
+
+# Unconditional output
+error() { >&2 _msg "$@"; }
+
+# Exit with error
+die() {
+  (($# > 1)) && error "${@:2}"
+  exit "${1:-0}"
+}
+
+# --------------------------------------------------------------------------------
+# Terminal detection functions
+
+# Get terminal width with multiple fallback methods
+# Returns: width as integer (bounds: 20-500)
+get_terminal_width() {
+  local -i width=80
+
+  # Method 1: tput cols
+  width=$(tput cols 2>/dev/null || echo 0)
+  if ((width > 0)); then
+    ((width < 20)) && width=20
+    ((width > 500)) && width=500
+    debug "Terminal width from tput: $width"
+    echo "$width"
+    return 0
+  fi
+
+  # Method 2: stty size
+  if [[ -t 1 ]]; then
+    read -r _ width < <(stty size 2>/dev/null || echo "0 0")
+    if ((width > 0)); then
+      ((width < 20)) && width=20
+      ((width > 500)) && width=500
+      debug "Terminal width from stty: $width"
+      echo "$width"
+      return 0
+    fi
+  fi
+
+  # Method 3: COLUMNS environment variable
+  width=${COLUMNS:-80}
+  ((width < 20)) && width=20
+  ((width > 500)) && width=500
+  debug "Terminal width from COLUMNS or default: $width"
+  echo "$width"
+}
+
+# --------------------------------------------------------------------------------
+# File validation functions
+
+# Validate file exists, is readable, and within size limits
+# Usage: validate_file_size "filepath" max_size_bytes
+validate_file_size() {
+  local -- filepath="$1"
+  local -i max_size="$2"
+  local -i file_size
+
+  [[ -f "$filepath" ]] || die 1 "File not found: '$filepath'"
+  [[ -r "$filepath" ]] || die 1 "Cannot read file: '$filepath'"
+
+  # Check if it's a directory
+  [[ -d "$filepath" ]] && die 1 "'$filepath' is a directory, not a file"
+
+  # Get file size in bytes
+  file_size=$(wc -c <"$filepath" 2>/dev/null || echo 0)
+
+  if ((file_size > max_size)); then
+    die 1 "File too large: $file_size bytes (maximum: $max_size bytes / 10MB)"
+  fi
+
+  debug "File size validation passed: $file_size bytes"
+  return 0
+}
+
+# --------------------------------------------------------------------------------
+# Signal handling
+
+# Cleanup function called on exit/interrupt
+cleanup() {
+  local -i exitcode=${1:-0}
+  # Reset terminal to clean state
+  [[ -n ${ANSI_RESET:-} ]] && printf '%s' "$ANSI_RESET"
+  exit "$exitcode"
+}
+
+# Install signal handlers
+install_signal_handlers() {
+  trap 'cleanup $?' EXIT
+  trap 'cleanup 130' INT
+  trap 'cleanup 143' TERM
+}
+
+# --------------------------------------------------------------------------------
+# Argument validation
+
+# Check if argument is present and not an option
+# Usage: noarg "$1" "$2" (checks if $2 exists and doesn't start with -)
+noarg() {
+  if (($# < 2)) || [[ ${2:0:1} == '-' ]]; then
+    die 2 "Missing argument for option '$1'"
+  fi
+  return 0
+}
+
+# --------------------------------------------------------------------------------
+# String manipulation
+
+# Trim leading and trailing whitespace
+# Usage: trim "  text  "
+trim() {
+  local -- v="$*"
+  v="${v#"${v%%[![:blank:]]*}"}"
+  echo -n "${v%"${v##*[![:blank:]]}"}"
+}
+
+# Pluralization helper
+# Usage: echo "Found $count file$(s $count)"
+s() {
+  (( ${1:-1} == 1 )) || echo -n 's'
+}
+
+# --------------------------------------------------------------------------------
+# ReDoS protection using timeout command
+
+# Safe regex substitution with timeout
+# Usage: safe_regex_sub "pattern" "replacement" "text" [timeout_seconds]
+safe_regex_sub() {
+  local -- pattern="$1"
+  local -- replacement="$2"
+  local -- text="$3"
+  local -i timeout="${4:-1}"
+
+  # For simple patterns (short, no quantifiers), execute directly
+  if [[ ${#pattern} -lt 50 ]] && [[ ! $pattern =~ [\*\+\{\?] ]]; then
+    sed "s/$pattern/$replacement/g" <<<"$text" 2>/dev/null || echo "$text"
+    return $?
+  fi
+
+  # For complex patterns, use timeout command
+  if timeout "$timeout" sed "s/$pattern/$replacement/g" <<<"$text" 2>/dev/null; then
+    return 0
+  else
+    warn "Regex timeout for pattern: ${pattern:0:50}..."
+    echo "$text"  # Return original on timeout
+    return 1
+  fi
+}
+
+# --------------------------------------------------------------------------------
+# Display declared variables (debugging aid)
+# Usage: decp VAR1 VAR2
+decp() {
+  declare -p "$@" | sed 's/^declare -[a-zA-Z-]* //'
+}
+
+# ================================================================================
+# ANSI Color Definitions (from lib/ansi-colors.sh)
+# ================================================================================
+
+# Detect terminal color support
+# Multiple detection methods to handle different environments:
+# 1. Check if stderr or stdout is a TTY
+# 2. Check TERM variable (for piped/non-TTY but colorful terminals)
+# 3. Verify terminal supports 256 colors via tput
+declare -i HAS_COLOR=0
+
+# Check if we have a terminal
+if [[ -t 2 ]] || [[ -t 1 ]] || [[ -n ${TERM:-} && $TERM != "dumb" ]]; then
+  declare -i color_count
+  color_count=$(tput colors 2>/dev/null || echo 0)
+  ((color_count >= 256)) && HAS_COLOR=1
+fi
+
+readonly -- HAS_COLOR
+
+# --------------------------------------------------------------------------------
+# Basic ANSI formatting codes
+if ((HAS_COLOR)); then
+  # Use $'...' syntax for ANSI escape sequences
+  readonly -- ANSI_RESET=$'\033[0m'
+  readonly -- ANSI_BOLD=$'\033[1m'
+  readonly -- ANSI_DIM=$'\033[2m'
+  readonly -- ANSI_ITALIC=$'\033[3m'
+  readonly -- ANSI_UNDERLINE=$'\033[4m'
+  readonly -- ANSI_STRIKE=$'\033[9m'
+
+  # Header colors (H1-H6)
+  readonly -- COLOR_H1=$'\033[38;5;226m'  # Bright yellow
+  readonly -- COLOR_H2=$'\033[38;5;214m'  # Orange
+  readonly -- COLOR_H3=$'\033[38;5;118m'  # Green
+  readonly -- COLOR_H4=$'\033[38;5;21m'   # Blue
+  readonly -- COLOR_H5=$'\033[38;5;93m'   # Purple
+  readonly -- COLOR_H6=$'\033[38;5;239m'  # Dark gray
+
+  # Element colors
+  readonly -- COLOR_TEXT=$'\033[38;5;7m'        # Light gray
+  readonly -- COLOR_BLOCKQUOTE=$'\033[48;5;236m'  # Dark background
+  readonly -- COLOR_CODEBLOCK=$'\033[90m'       # Gray
+  readonly -- COLOR_LIST=$'\033[36m'            # Cyan
+  readonly -- COLOR_HR=$'\033[36m'              # Cyan
+  readonly -- COLOR_TABLE=$'\033[90m'           # Gray
+  readonly -- COLOR_LINK=$'\033[38;5;45m'       # Cyan-blue
+
+  # Syntax highlighting colors
+  readonly -- COLOR_KEYWORD=$'\033[38;5;204m'   # Pink
+  readonly -- COLOR_STRING=$'\033[38;5;114m'    # Green
+  readonly -- COLOR_NUMBER=$'\033[38;5;220m'    # Yellow
+  readonly -- COLOR_COMMENT=$'\033[38;5;245m'   # Gray
+  readonly -- COLOR_FUNCTION=$'\033[38;5;81m'   # Blue
+  readonly -- COLOR_CLASS=$'\033[38;5;214m'     # Orange
+  readonly -- COLOR_BUILTIN=$'\033[38;5;147m'   # Purple
+else
+  # No color support - all empty strings
+  readonly -- ANSI_RESET=''
+  readonly -- ANSI_BOLD=''
+  readonly -- ANSI_DIM=''
+  readonly -- ANSI_ITALIC=''
+  readonly -- ANSI_UNDERLINE=''
+  readonly -- ANSI_STRIKE=''
+
+  readonly -- COLOR_H1=''
+  readonly -- COLOR_H2=''
+  readonly -- COLOR_H3=''
+  readonly -- COLOR_H4=''
+  readonly -- COLOR_H5=''
+  readonly -- COLOR_H6=''
+
+  readonly -- COLOR_TEXT=''
+  readonly -- COLOR_BLOCKQUOTE=''
+  readonly -- COLOR_CODEBLOCK=''
+  readonly -- COLOR_LIST=''
+  readonly -- COLOR_HR=''
+  readonly -- COLOR_TABLE=''
+  readonly -- COLOR_LINK=''
+
+  readonly -- COLOR_KEYWORD=''
+  readonly -- COLOR_STRING=''
+  readonly -- COLOR_NUMBER=''
+  readonly -- COLOR_COMMENT=''
+  readonly -- COLOR_FUNCTION=''
+  readonly -- COLOR_CLASS=''
+  readonly -- COLOR_BUILTIN=''
+fi
+
+# --------------------------------------------------------------------------------
+# Utility functions for ANSI handling
+
+# Strip ANSI escape sequences from text
+# Usage: strip_ansi "text with ANSI codes"
+strip_ansi() {
+  local -- text="$1"
+  # Remove ANSI escape sequences: ESC [ ... letter
+  sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' <<<"$text"
+}
+
+# Get visible length of text (without ANSI codes)
+# Usage: visible_length "text with ANSI codes"
+visible_length() {
+  local -- text="$1"
+  local -- stripped
+  stripped=$(strip_ansi "$text")
+  echo "${#stripped}"
+}
+
+# Sanitize input by removing ANSI sequences
+# Usage: sanitize_ansi "user input"
+sanitize_ansi() {
+  local -- text="$1"
+  strip_ansi "$text"
+}
+
+# ================================================================================
+# Rendering Functions (from lib/renderer.sh)
+# ================================================================================
+
+# --------------------------------------------------------------------------------
+# Inline formatting engine
+
+# Apply all inline formatting to a line of text
+# Order matters: process code first, then images, links, then bold/italic/strike
+# Usage: colorize_line "markdown text"
+colorize_line() {
+  local -- line="$1"
+  local -- result="$line"
+
+  # 1. Inline code: `code` (remove backticks from output)
+  result=$(sed -E "s/\`([^\`]+)\`/${COLOR_CODEBLOCK}\1${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
+
+  # 2. Images: ![alt](url) - must be before links
+  if ((OPTIONS[images])); then
+    result=$(sed -E "s/!\[([^]]+)\]\(([^)]+)\)/${ANSI_BOLD}[IMG: \1]${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
+  fi
+
+  # 3. Links: [text](url)
+  if ((OPTIONS[links])); then
+    result=$(sed -E "s/\[([^]]+)\]\(([^)]+)\)/${COLOR_LINK}${ANSI_UNDERLINE}\1${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
+  fi
+
+  # 4. Bold + Italic combined: ***text***
+  result=$(sed -E "s/\*\*\*([^*]+)\*\*\*/${ANSI_BOLD}${ANSI_ITALIC}\1${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
+
+  # 5. Bold + Italic alternative: **_text_** or _**text**_
+  result=$(sed -E "s/\*\*_([^_]+)_\*\*/${ANSI_BOLD}${ANSI_ITALIC}\1${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
+  result=$(sed -E "s/_\*\*([^*]+)\*\*_/${ANSI_BOLD}${ANSI_ITALIC}\1${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
+
+  # 6. Bold: **text**
+  result=$(sed -E "s/\*\*([^*]+)\*\*/${ANSI_BOLD}\1${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
+
+  # 7. Italic: *text* or _text_ (avoid matching inside already-formatted text)
+  # Don't match if preceded by certain characters that indicate formatted text
+  result=$(sed -E "s/([^*])\*([^*]+)\*([^*])/\1${ANSI_ITALIC}\2${ANSI_RESET}${COLOR_TEXT}\3/g" <<<"$result")
+  # Skip underscore italic inside inline code by not matching adjacent to ANSI codes
+  # Don't process _text_ at all - it's too error-prone with code containing underscores
+
+  # 8. Strikethrough: ~~text~~
+  result=$(sed -E "s/~~([^~]+)~~/${ANSI_STRIKE}\1${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
+
+  # 9. Footnote references: [^id] (if enabled)
+  if ((OPTIONS[footnotes])); then
+    result=$(sed -E "s/\[\^([^]]+)\]/${COLOR_TEXT}[${ANSI_BOLD}${ANSI_DIM}^\1${ANSI_RESET}${COLOR_TEXT}]/g" <<<"$result")
+  fi
+
+  echo "$result"
+}
+
+# --------------------------------------------------------------------------------
+# Text wrapping with ANSI awareness
+
+# Wrap text to specified width, preserving ANSI codes
+# Usage: wrap_text "text with ANSI" width
+wrap_text() {
+  local -- text="$1"
+  local -i width="$2"
+  local -i visible_len
+  local -a words
+  local -- word current_line visible_current stripped_word
+  local -i current_len word_len
+
+  # Get visible length
+  visible_len=$(visible_length "$text")
+
+  # If text fits, return as-is
+  if ((visible_len <= width)); then
+    echo "$text"
+    return 0
+  fi
+
+  # Split into words
+  IFS=' ' read -ra words <<<"$text"
+
+  # Build wrapped lines
+  current_line="${words[0]}"
+  visible_current=$(strip_ansi "$current_line")
+  current_len=${#visible_current}
+
+  for word in "${words[@]:1}"; do
+    stripped_word=$(strip_ansi "$word")
+    word_len=${#stripped_word}
+
+    if ((current_len + word_len + 1 <= width)); then
+      # Word fits on current line
+      current_line+=" $word"
+      current_len+=1
+      current_len+=$word_len
+    else
+      # Start new line
+      echo "$current_line"
+      current_line="$word"
+      current_len=$word_len
+    fi
+  done
+
+  # Print last line
+  [[ -n $current_line ]] && echo "$current_line"
+}
+
+# --------------------------------------------------------------------------------
+# Header rendering
+
+# Render a markdown header with appropriate color
+# Usage: render_header "###" "Header Text"
+render_header() {
+  local -- hashes="$1"
+  local -- text="$2"
+  local -- color formatted_text
+
+  # Determine color based on header level
+  case "${#hashes}" in
+    1) color="$COLOR_H1" ;;
+    2) color="$COLOR_H2" ;;
+    3) color="$COLOR_H3" ;;
+    4) color="$COLOR_H4" ;;
+    5) color="$COLOR_H5" ;;
+    *) color="$COLOR_H6" ;;
+  esac
+
+  # Apply inline formatting to header text
+  formatted_text=$(colorize_line "$text")
+
+  printf '%s%s%s\n' "$color" "$formatted_text" "$ANSI_RESET"
+}
+
+# --------------------------------------------------------------------------------
+# List rendering
+
+# Render unordered list item with proper indentation
+# Usage: render_list_item "indent" "content" term_width
+render_list_item() {
+  local -- indent="$1"
+  local -- content="$2"
+  local -i term_width="$3"
+  local -i indent_level
+  local -- bullet_indent text_indent formatted_content
+  local -a wrapped_lines
+
+  # Calculate indentation level (every 2 spaces = 1 level)
+  indent_level=$((${#indent} / 2))
+  bullet_indent=$(printf '  %.0s' $(seq 1 "$indent_level"))
+  text_indent=$(printf '  %.0s' $(seq 1 $((indent_level + 1))))
+
+  # Apply inline formatting
+  formatted_content=$(colorize_line "$content")
+
+  # Wrap text to terminal width
+  readarray -t wrapped_lines < <(wrap_text "$formatted_content" $((term_width - ${#text_indent} - 2)))
+
+  # Print first line with bullet
+  printf '%s%s* %s%s%s\n' "$bullet_indent" "$COLOR_LIST" "$COLOR_TEXT" "${wrapped_lines[0]}" "$ANSI_RESET"
+
+  # Print continuation lines if any
+  local -- line
+  for line in "${wrapped_lines[@]:1}"; do
+    printf '%s%s%s\n' "$text_indent" "$line" "$ANSI_RESET"
+  done
+}
+
+# Render ordered list item
+# Usage: render_ordered_item "indent" "number" "content" term_width
+render_ordered_item() {
+  local -- indent="$1"
+  local -- number="$2"
+  local -- content="$3"
+  local -i term_width="$4"
+  local -i indent_level number_width
+  local -- number_indent text_indent formatted_content
+  local -a wrapped_lines
+
+  # Calculate indentation
+  indent_level=$((${#indent} / 2))
+  number_indent=$(printf '  %.0s' $(seq 1 "$indent_level"))
+  number_width=$((${#number} + 2))  # number + ". "
+  text_indent="${number_indent}$(printf ' %.0s' $(seq 1 "$number_width"))"
+
+  # Apply inline formatting
+  formatted_content=$(colorize_line "$content")
+
+  # Wrap text
+  readarray -t wrapped_lines < <(wrap_text "$formatted_content" $((term_width - ${#text_indent} - 2)))
+
+  # Print first line with number
+  printf '%s%s%s. %s%s%s\n' "$number_indent" "$COLOR_LIST" "$number" "$COLOR_TEXT" "${wrapped_lines[0]}" "$ANSI_RESET"
+
+  # Print continuation lines
+  local -- line
+  for line in "${wrapped_lines[@]:1}"; do
+    printf '%s%s%s\n' "$text_indent" "$line" "$ANSI_RESET"
+  done
+}
+
+# Render task list item (checkbox)
+# Usage: render_task_item "indent" "status" "content" term_width
+render_task_item() {
+  local -- indent="$1"
+  local -- status="$2"  # 'x' or ' '
+  local -- content="$3"
+  local -i term_width="$4"
+  local -i indent_level
+  local -- bullet_indent text_indent checkbox formatted_content
+  local -a wrapped_lines
+
+  # Calculate indentation
+  indent_level=$((${#indent} / 2))
+  bullet_indent=$(printf '  %.0s' $(seq 1 "$indent_level"))
+  text_indent=$(printf '  %.0s' $(seq 1 $((indent_level + 1))))"     "  # 5 extra for "[ ] "
+
+  # Format checkbox
+  if [[ $status == 'x' ]]; then
+    checkbox="${COLOR_LIST}[${ANSI_BOLD}x${ANSI_RESET}${COLOR_LIST}]"
+  else
+    checkbox="${COLOR_LIST}[ ]"
+  fi
+
+  # Apply inline formatting
+  formatted_content=$(colorize_line "$content")
+
+  # Wrap text
+  readarray -t wrapped_lines < <(wrap_text "$formatted_content" $((term_width - ${#text_indent} - 2)))
+
+  # Print first line
+  printf '%s%s* %s %s%s%s\n' "$bullet_indent" "$COLOR_LIST" "$checkbox" "$COLOR_TEXT" "${wrapped_lines[0]}" "$ANSI_RESET"
+
+  # Print continuation lines
+  local -- line
+  for line in "${wrapped_lines[@]:1}"; do
+    printf '%s%s%s\n' "$text_indent" "$line" "$ANSI_RESET"
+  done
+}
+
+# --------------------------------------------------------------------------------
+# Blockquote rendering
+
+# Render blockquote with proper formatting
+# Usage: render_blockquote "content" term_width
+render_blockquote() {
+  local -- content="$1"
+  local -i term_width="$2"
+  local -- formatted_content
+  local -a wrapped_lines
+
+  # Apply inline formatting
+  formatted_content=$(colorize_line "$content")
+
+  # Wrap text
+  readarray -t wrapped_lines < <(wrap_text "$formatted_content" $((term_width - 4)))
+
+  # Print each line with blockquote formatting
+  local -- line
+  for line in "${wrapped_lines[@]}"; do
+    printf '%s  > %s%s%s\n' "$COLOR_TEXT" "$COLOR_BLOCKQUOTE" "$line" "$ANSI_RESET"
+  done
+}
+
+# --------------------------------------------------------------------------------
+# Horizontal rule rendering
+
+# Render horizontal rule
+# Usage: render_hr term_width
+render_hr() {
+  local -i term_width="$1"
+  local -- rule
+  rule=$(printf '─%.0s' $(seq 1 $((term_width - 1))))
+  printf '%s%s%s\n' "$COLOR_HR" "$rule" "$ANSI_RESET"
+}
+
+# --------------------------------------------------------------------------------
+# Code block rendering (simplified syntax highlighting)
+
+# Render a line of code with basic syntax highlighting
+# Usage: render_code_line "code text" "language"
+render_code_line() {
+  local -- code="$1"
+  local -- lang="${2:-}"
+  local -- output
+
+  # Sanitize ANSI codes from input
+  code=$(sanitize_ansi "$code")
+
+  # If syntax highlighting is disabled, just print with code color
+  if ((OPTIONS[syntax_highlight] == 0)) || [[ -z $lang ]]; then
+    printf '%s%s%s\n' "$COLOR_CODEBLOCK" "$code" "$ANSI_RESET"
+    return 0
+  fi
+
+  # Normalize language name
+  case "${lang,,}" in
+    py) lang='python' ;;
+    js) lang='javascript' ;;
+    sh|shell) lang='bash' ;;
+  esac
+
+  # Apply simple syntax highlighting based on language
+  case "${lang,,}" in
+    python)
+      output=$(highlight_python "$code")
+      ;;
+    javascript)
+      output=$(highlight_javascript "$code")
+      ;;
+    bash)
+      output=$(highlight_bash "$code")
+      ;;
+    *)
+      output="$code"
+      ;;
+  esac
+
+  printf '%s%s%s\n' "$COLOR_CODEBLOCK" "$output" "$ANSI_RESET"
+}
+
+# Simple Python syntax highlighting
+# Note: Simplified to avoid nested ANSI code issues
+highlight_python() {
+  local -- code="$1"
+
+  # Comments (highest priority) - return immediately
+  if [[ $code =~ ^[[:space:]]*# ]]; then
+    echo "${COLOR_COMMENT}${code}${COLOR_CODEBLOCK}"
+    return 0
+  fi
+
+  # Docstrings - return immediately
+  if [[ $code =~ (\'\'\'|\"\"\") ]]; then
+    echo "${COLOR_STRING}${code}${COLOR_CODEBLOCK}"
+    return 0
+  fi
+
+  # For other lines, use minimal highlighting to avoid ANSI code conflicts
+  # Just highlight keywords - keep it simple
+  local -- result="$code"
+  result=$(sed -E "s/\\b(def|class|if|elif|else|for|while|return|import|from|print)\\b/${COLOR_KEYWORD}\\1${COLOR_CODEBLOCK}/g" <<<"$result")
+
+  echo "$result"
+}
+
+# Simple JavaScript syntax highlighting
+# Note: Simplified to avoid nested ANSI code issues
+highlight_javascript() {
+  local -- code="$1"
+
+  # Comments - return immediately
+  if [[ $code =~ ^[[:space:]]*// ]]; then
+    echo "${COLOR_COMMENT}${code}${COLOR_CODEBLOCK}"
+    return 0
+  fi
+
+  # Minimal highlighting - just keywords
+  local -- result="$code"
+  result=$(sed -E "s/\\b(function|const|let|var|if|else|for|while|return|class|console)\\b/${COLOR_KEYWORD}\\1${COLOR_CODEBLOCK}/g" <<<"$result")
+
+  echo "$result"
+}
+
+# Simple Bash syntax highlighting
+# Note: Simplified to avoid nested ANSI code issues
+highlight_bash() {
+  local -- code="$1"
+
+  # Comments - return immediately
+  if [[ $code =~ ^[[:space:]]*# ]]; then
+    echo "${COLOR_COMMENT}${code}${COLOR_CODEBLOCK}"
+    return 0
+  fi
+
+  # Minimal highlighting - just keywords and common built-ins
+  local -- result="$code"
+  result=$(sed -E "s/\\b(if|then|else|elif|fi|for|while|do|done|echo|printf|local|declare)\\b/${COLOR_KEYWORD}\\1${COLOR_CODEBLOCK}/g" <<<"$result")
+
+  echo "$result"
+}
+
+# ================================================================================
+# Table Rendering Functions (from lib/tables.sh)
+# ================================================================================
+
+# --------------------------------------------------------------------------------
+# Main table rendering function
+
+# Parse and render a complete table
+# Usage: render_table lines_array_name current_index_varname
+# Updates the index to point to first line after table
+render_table() {
+  local -n _md_lines=$1
+  local -n _md_idx=$2
+
+  local -a table_lines=() all_rows=() data_rows=() alignments=() col_widths=()
+  local -i has_alignment=0 col_count=0
+  local -- line
+
+  debug "Parsing table starting at line $_md_idx"
+
+  # --------------------------------------------------------------------------------
+  # Step 1: Collect all consecutive table lines
+  while ((_md_idx < ${#_md_lines[@]})); do
+    line="${_md_lines[_md_idx]}"
+    # Check if line starts with | (possibly after spaces)
+    [[ $line =~ ^[[:space:]]*\| ]] || break
+    table_lines+=("$line")
+    _md_idx+=1
+  done
+
+  debug "Collected ${#table_lines[@]} table lines"
+
+  # Need at least 2 lines for a valid table (header + separator or header + data)
+  if ((${#table_lines[@]} < 2)); then
+    warn "Invalid table: too few lines"
+    return 1
+  fi
+
+  # --------------------------------------------------------------------------------
+  # Step 2: Parse all rows and detect alignment row
+  _parse_table_structure table_lines all_rows alignments has_alignment col_count
+
+  debug "Parsed table: $col_count columns, alignment=$has_alignment"
+
+  # --------------------------------------------------------------------------------
+  # Step 3: Separate data rows from alignment row
+  if ((has_alignment)); then
+    # First row is header, second is alignment, rest are data
+    data_rows=("${all_rows[0]}")  # Header
+    data_rows+=("${all_rows[@]:2}")  # Skip alignment row (index 1)
+  else
+    # No alignment row - all rows are data
+    data_rows=("${all_rows[@]}")
+  fi
+
+  # Ensure we have alignment info for all columns
+  while ((${#alignments[@]} < col_count)); do
+    alignments+=('left')
+  done
+
+  # --------------------------------------------------------------------------------
+  # Step 4: Calculate column widths
+  _calculate_column_widths data_rows col_count col_widths
+
+  # --------------------------------------------------------------------------------
+  # Step 5: Render the table
+  _render_table_output data_rows alignments col_widths col_count has_alignment
+
+  return 0
+}
+
+# --------------------------------------------------------------------------------
+# Parse table structure
+
+# Parse table lines into rows and detect alignment
+# Usage: _parse_table_structure table_lines all_rows alignments has_alignment col_count
+_parse_table_structure() {
+  local -n _table_lines=$1
+  local -n _all_rows=$2
+  local -n _alignments=$3
+  local -n _has_alignment=$4
+  local -n _col_count=$5
+
+  local -- line cell
+  local -a cells
+  local -i row_num=0 max_cols=0 i
+
+  for line in "${_table_lines[@]}"; do
+    # Remove leading/trailing whitespace
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+
+    # Remove leading and trailing pipes
+    line="${line#|}"
+    line="${line%|}"
+
+    # Split by pipe into cells
+    IFS='|' read -ra cells <<<"$line"
+
+    # Trim whitespace from each cell
+    for ((i=0; i<${#cells[@]}; i+=1)); do
+      cell="${cells[i]}"
+      cell="${cell#"${cell%%[![:space:]]*}"}"
+      cell="${cell%"${cell##*[![:space:]]}"}"
+      cells[i]="$cell"
+    done
+
+    # Check if this is an alignment row (row 2, all cells match :?-+:?)
+    if ((row_num == 1)); then
+      local -i is_alignment=1
+      for cell in "${cells[@]}"; do
+        [[ $cell =~ ^:?-+:?$ ]] || { is_alignment=0; break; }
+      done
+
+      if ((is_alignment)); then
+        _has_alignment=1
+        # Parse alignment for each column
+        for cell in "${cells[@]}"; do
+          if [[ $cell =~ ^:-+:$ ]]; then
+            _alignments+=('center')
+          elif [[ $cell =~ ^-+:$ ]]; then
+            _alignments+=('right')
+          else
+            _alignments+=('left')
+          fi
+        done
+      fi
+    fi
+
+    # Store row (as delimited string for easier handling)
+    local -- row_str
+    printf -v row_str '%s\037' "${cells[@]}"  # Use unit separator character
+    _all_rows+=("$row_str")
+
+    # Track maximum column count
+    ((${#cells[@]} > max_cols)) && max_cols=${#cells[@]}
+    row_num+=1
+  done
+
+  _col_count=$max_cols
+}
+
+# --------------------------------------------------------------------------------
+# Calculate column widths
+
+# Calculate the width needed for each column
+# Usage: _calculate_column_widths data_rows col_count col_widths
+_calculate_column_widths() {
+  local -n _data_rows=$1
+  local -i _col_count=$2
+  local -n _col_widths=$3
+
+  local -- row cell formatted_cell stripped_cell
+  local -a cells
+  local -i i width
+
+  # Initialize widths to 0
+  for ((i=0; i<_col_count; i+=1)); do
+    _col_widths[i]=0
+  done
+
+  # Process each row
+  for row in "${_data_rows[@]}"; do
+    # Parse cells (split by unit separator)
+    IFS=$'\037' read -ra cells <<<"$row"
+
+    # Measure each cell
+    for ((i=0; i<${#cells[@]} && i<_col_count; i+=1)); do
+      cell="${cells[i]}"
+
+      # Apply inline formatting to get actual rendered text
+      formatted_cell=$(colorize_line "$cell")
+
+      # Get visible length (strip ANSI codes)
+      stripped_cell=$(strip_ansi "$formatted_cell")
+      width=${#stripped_cell}
+
+      # Update max width for this column
+      ((width > _col_widths[i])) && _col_widths[i]=$width
+    done
+  done
+
+  debug "Column widths: ${_col_widths[*]}"
+}
+
+# --------------------------------------------------------------------------------
+# Render table output
+
+# Render complete table with borders and formatting
+# Usage: _render_table_output data_rows alignments col_widths col_count has_alignment
+_render_table_output() {
+  local -n _data_rows=$1
+  local -n _alignments=$2
+  local -n _col_widths=$3
+  local -i _col_count=$4
+  local -i _has_alignment=$5
+
+  local -- horiz_line row cell_text aligned_cell
+  local -a cells
+  local -i i width row_num=0
+
+  # --------------------------------------------------------------------------------
+  # Build horizontal divider line
+  horiz_line='+'
+  for ((i=0; i<_col_count; i+=1)); do
+    width=${_col_widths[i]}
+    horiz_line+=$(printf -- '-%.0s' $(seq 1 $((width + 2))))
+    horiz_line+='+'
+  done
+
+  # --------------------------------------------------------------------------------
+  # Print top border
+  printf '%s%s%s\n' "$COLOR_TABLE" "$horiz_line" "$ANSI_RESET"
+
+  # --------------------------------------------------------------------------------
+  # Print each row
+  for row in "${_data_rows[@]}"; do
+    # Parse cells
+    IFS=$'\037' read -ra cells <<<"$row"
+
+    # Pad cells array to column count
+    while ((${#cells[@]} < _col_count)); do
+      cells+=('')
+    done
+
+    # Start row
+    printf '%s|' "$COLOR_TABLE"
+
+    # Print each cell
+    for ((i=0; i<_col_count; i+=1)); do
+      cell_text="${cells[i]}"
+
+      # Apply inline formatting
+      cell_text=$(colorize_line "$cell_text")
+
+      # Strip COLOR_TEXT codes that interfere with table rendering
+      cell_text="${cell_text//$COLOR_TEXT/}"
+
+      # Align cell
+      width=${_col_widths[i]}
+      aligned_cell=$(_align_cell "$cell_text" "$width" "${_alignments[i]}")
+
+      # Print cell with table color restoration
+      printf ' %s%s |' "$aligned_cell" "$COLOR_TABLE"
+    done
+
+    printf '%s\n' "$ANSI_RESET"
+
+    # Print divider after header row (if alignment was detected)
+    if ((row_num == 0 && _has_alignment)); then
+      printf '%s%s%s\n' "$COLOR_TABLE" "$horiz_line" "$ANSI_RESET"
+    fi
+
+    row_num+=1
+  done
+
+  # --------------------------------------------------------------------------------
+  # Print bottom border
+  printf '%s%s%s\n' "$COLOR_TABLE" "$horiz_line" "$ANSI_RESET"
+}
+
+# --------------------------------------------------------------------------------
+# Cell alignment
+
+# Align cell content to specified width
+# Usage: _align_cell "cell_text" width "alignment"
+_align_cell() {
+  local -- text="$1"
+  local -i width="$2"
+  local -- alignment="$3"
+  local -- stripped_text
+  local -i visible_len padding left_pad right_pad
+
+  # Get visible length
+  stripped_text=$(strip_ansi "$text")
+  visible_len=${#stripped_text}
+
+  # Calculate padding needed
+  padding=$((width - visible_len))
+  ((padding < 0)) && padding=0
+
+  case "$alignment" in
+    center)
+      # Center alignment
+      left_pad=$((padding / 2))
+      right_pad=$((padding - left_pad))
+      printf '%*s%s%*s' "$left_pad" '' "$text" "$right_pad" ''
+      ;;
+    right)
+      # Right alignment
+      printf '%*s%s' "$padding" '' "$text"
+      ;;
+    *)
+      # Left alignment (default)
+      printf '%s%*s' "$text" "$padding" ''
+      ;;
+  esac
+}
+
+# ================================================================================
+# Markdown Parser Functions (from lib/parser.sh)
+# ================================================================================
+
+# --------------------------------------------------------------------------------
+# Main markdown parser
+
+# Parse markdown line array and produce ANSI output
+# Usage: parse_markdown lines_array_name
+parse_markdown() {
+  local -n _lines=$1
+  local -i i=0
+  local -- line original_line
+
+  # Reset parsing state
+  IN_CODE_BLOCK=0
+  CODE_FENCE_TYPE=''
+  CODE_LANG=''
+  FOOTNOTES=()
+  FOOTNOTE_REFS=()
+
+  while ((i < ${#_lines[@]})); do
+    line="${_lines[i]}"
+    original_line="$line"
+
+    # Trim trailing whitespace
+    line="${line%"${line##*[![:space:]]}"}"
+
+    # --------------------------------------------------------------------------------
+    # CODE BLOCKS - Fenced (``` or ~~~)
+    # Use literal backticks in regex
+    if [[ $line =~ ^(\`\`\`|~~~)(.*)$ ]]; then
+      local -- fence="${BASH_REMATCH[1]}"
+      local -- lang_spec="${BASH_REMATCH[2]}"
+      lang_spec="${lang_spec## }"  # Trim leading spaces
+      lang_spec="${lang_spec%% }"  # Trim trailing spaces
+
+      if ((IN_CODE_BLOCK)); then
+        # Closing fence
+        printf '%s%s%s\n' "$COLOR_CODEBLOCK" "$fence" "$ANSI_RESET"
+        IN_CODE_BLOCK=0
+        CODE_FENCE_TYPE=''
+        CODE_LANG=''
+      else
+        # Opening fence
+        IN_CODE_BLOCK=1
+        CODE_FENCE_TYPE="$fence"
+        CODE_LANG="$lang_spec"
+        printf '%s%s' "$COLOR_CODEBLOCK" "$fence"
+        [[ -n $lang_spec ]] && printf ' %s' "$lang_spec"
+        printf '%s\n' "$ANSI_RESET"
+      fi
+      i+=1
+      continue
+    fi
+
+    # Inside code block - render code lines
+    if ((IN_CODE_BLOCK)); then
+      render_code_line "$line" "$CODE_LANG"
+      i+=1
+      continue
+    fi
+
+    # --------------------------------------------------------------------------------
+    # TABLES - Lines starting with |
+    if [[ $line =~ ^[[:space:]]*\| ]] && ((OPTIONS[tables])); then
+      render_table _lines i
+      # render_table updates i to next line after table
+      continue
+    elif [[ $line =~ ^[[:space:]]*\| ]] && ((OPTIONS[tables] == 0)); then
+      # Tables disabled but looks like a table - treat as plain text
+      local -- formatted_line
+      formatted_line=$(colorize_line "$line")
+      readarray -t wrapped < <(wrap_text "${COLOR_TEXT}${formatted_line}" "$TERM_WIDTH")
+      printf '%s\n' "${wrapped[@]}"
+      i+=1
+      continue
+    fi
+
+    # --------------------------------------------------------------------------------
+    # HORIZONTAL RULES: --- / === / ___
+    if [[ $line =~ ^[[:space:]]*([-_=])\1{2,}[[:space:]]*$ ]]; then
+      render_hr "$TERM_WIDTH"
+      i+=1
+      continue
+    fi
+
+    # --------------------------------------------------------------------------------
+    # BLOCKQUOTES: Lines starting with >
+    if [[ $line =~ ^[[:space:]]*\>[[:space:]]?(.*)$ ]]; then
+      local -- quote_content="${BASH_REMATCH[1]}"
+      render_blockquote "$quote_content" "$TERM_WIDTH"
+      i+=1
+      continue
+    fi
+
+    # --------------------------------------------------------------------------------
+    # HEADERS: # through ######
+    if [[ $line =~ ^(#{1,6})[[:space:]]+(.+)$ ]]; then
+      local -- hashes="${BASH_REMATCH[1]}"
+      local -- header_text="${BASH_REMATCH[2]}"
+      render_header "$hashes" "$header_text"
+      i+=1
+      continue
+    fi
+
+    # --------------------------------------------------------------------------------
+    # TASK LISTS: - [ ] or - [x]
+    if [[ $line =~ ^([[:space:]]*)[-*][[:space:]]+\[([[:space:]x])\][[:space:]]+(.+)$ ]]; then
+      local -- indent="${BASH_REMATCH[1]}"
+      local -- status="${BASH_REMATCH[2]}"
+      local -- task_content="${BASH_REMATCH[3]}"
+
+      if ((OPTIONS[task_lists])); then
+        render_task_item "$indent" "$status" "$task_content" "$TERM_WIDTH"
+      else
+        # Treat as regular list with checkbox as part of content
+        render_list_item "$indent" "[$status] $task_content" "$TERM_WIDTH"
+      fi
+      i+=1
+      continue
+    fi
+
+    # --------------------------------------------------------------------------------
+    # UNORDERED LISTS: - or *
+    if [[ $line =~ ^([[:space:]]*)[-*][[:space:]]+(.+)$ ]]; then
+      local -- indent="${BASH_REMATCH[1]}"
+      local -- list_content="${BASH_REMATCH[2]}"
+      render_list_item "$indent" "$list_content" "$TERM_WIDTH"
+      i+=1
+      continue
+    fi
+
+    # --------------------------------------------------------------------------------
+    # ORDERED LISTS: 1. 2. etc.
+    if [[ $line =~ ^([[:space:]]*)([0-9]+)\.[[:space:]]+(.+)$ ]]; then
+      local -- indent="${BASH_REMATCH[1]}"
+      local -- number="${BASH_REMATCH[2]}"
+      local -- list_content="${BASH_REMATCH[3]}"
+      render_ordered_item "$indent" "$number" "$list_content" "$TERM_WIDTH"
+      i+=1
+      continue
+    fi
+
+    # --------------------------------------------------------------------------------
+    # FOOTNOTE DEFINITIONS: [^id]: text
+    if [[ $line =~ ^\[\^([^]]+)\]:[[:space:]]+(.+)$ ]] && ((OPTIONS[footnotes])); then
+      local -- footnote_id="${BASH_REMATCH[1]}"
+      local -- footnote_text="${BASH_REMATCH[2]}"
+
+      # Store footnote
+      FOOTNOTES[$footnote_id]="$footnote_text"
+
+      # Track reference order
+      if [[ ! " ${FOOTNOTE_REFS[*]} " =~ " ${footnote_id} " ]]; then
+        FOOTNOTE_REFS+=("$footnote_id")
+      fi
+
+      # Skip rendering this line
+      i+=1
+      continue
+    fi
+
+    # --------------------------------------------------------------------------------
+    # EMPTY LINES
+    if [[ -z $line ]]; then
+      echo ""
+      i+=1
+      continue
+    fi
+
+    # --------------------------------------------------------------------------------
+    # REGULAR TEXT - with inline formatting
+    local -- formatted_line
+    local -a wrapped
+
+    # Find and track footnote references in text
+    if ((OPTIONS[footnotes])); then
+      while [[ $line =~ \[\^([^]]+)\] ]]; do
+        local -- ref_id="${BASH_REMATCH[1]}"
+        if [[ ! " ${FOOTNOTE_REFS[*]} " =~ " ${ref_id} " ]]; then
+          FOOTNOTE_REFS+=("$ref_id")
+        fi
+        # Remove matched part to find next
+        line="${line/${BASH_REMATCH[0]}/}"
+      done
+      line="$original_line"  # Restore for colorization
+    fi
+
+    formatted_line=$(colorize_line "$line")
+    readarray -t wrapped < <(wrap_text "${COLOR_TEXT}${formatted_line}" "$TERM_WIDTH")
+
+    printf '%s\n' "${wrapped[@]}"
+    i+=1
+  done
+
+  # --------------------------------------------------------------------------------
+  # Render footnotes section at end if any exist
+  if ((OPTIONS[footnotes])) && ((${#FOOTNOTES[@]} > 0)) && ((${#FOOTNOTE_REFS[@]} > 0)); then
+    render_footnotes
+  fi
+}
+
+# --------------------------------------------------------------------------------
+# Footnote rendering
+
+# Render collected footnotes at end of document
+render_footnotes() {
+  local -- ref_id footnote_text formatted_text
+
+  echo ""
+  printf '%s%s%s\n' "$COLOR_H2" "Footnotes:" "$ANSI_RESET"
+  echo ""
+
+  for ref_id in "${FOOTNOTE_REFS[@]}"; do
+    if [[ -n ${FOOTNOTES[$ref_id]:-} ]]; then
+      footnote_text="${FOOTNOTES[$ref_id]}"
+      formatted_text=$(colorize_line "$footnote_text")
+      printf '%s[%s%s^%s%s%s]: %s%s\n' \
+        "$COLOR_TEXT" \
+        "$ANSI_BOLD" "$ANSI_DIM" "$ref_id" "$ANSI_RESET" "$COLOR_TEXT" \
+        "$formatted_text" \
+        "$ANSI_RESET"
+    else
+      # Reference without definition
+      printf '%s[%s%s^%s%s%s]: %sMissing footnote definition%s\n' \
+        "$COLOR_TEXT" \
+        "$ANSI_BOLD" "$ANSI_DIM" "$ref_id" "$ANSI_RESET" "$COLOR_TEXT" \
+        "${ANSI_ITALIC}" \
+        "$ANSI_RESET"
+    fi
+  done
+}
+
+# ================================================================================
+# Main Script Functions
+# ================================================================================
 
 # Install signal handlers
 install_signal_handlers
