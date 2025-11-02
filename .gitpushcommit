@@ -28,7 +28,7 @@ git -c user.name='Biksu Okusi' -c user.email='biksu@okusi.id' commit -m "${1:-up
 # Check if remote is configured before pushing
 if git remote -v | grep -q origin; then
   git push
-  echo "Repository: https://github.com/$(grep -sm1 Open-Tech .git/* |cut -d':' -f3)"
+  echo "Repository: https://github.com/$(git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git$||')"
 else
   >&2 echo 'Warning: No git remote configured. Skipping push.'
   >&2 echo 'To push manually, set up remote with: git remote add origin <url>'
