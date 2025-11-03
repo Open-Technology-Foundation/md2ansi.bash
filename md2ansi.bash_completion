@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# md2ansi.bash_completion - Bash completion for md2ansi and md commands
+# Part of the md2ansi.bash project
+#
+# Installation:
+#   System: sudo cp md2ansi.bash_completion /usr/share/bash-completion/completions/md2ansi
+#   User:   mkdir -p ~/.local/share/bash-completion/completions
+#           cp md2ansi.bash_completion ~/.local/share/bash-completion/completions/md2ansi
+#   Manual: source md2ansi.bash_completion
+#
+# shellcheck disable=SC2207  # COMPREPLY array assignment pattern is standard for bash completion
+# shellcheck disable=SC2034  # Metadata variables required for BCS compliance
+# shellcheck disable=SC2155  # Declare and assign separately - metadata exception
+
+set -euo pipefail
+shopt -s inherit_errexit shift_verbose extglob nullglob
+
+# Script metadata
+declare -r VERSION='1.0.0'
+declare -r SCRIPT_PATH=$(realpath -- "${BASH_SOURCE[0]}")
+declare -r SCRIPT_DIR=${SCRIPT_PATH%/*}
+declare -r SCRIPT_NAME=${SCRIPT_PATH##*/}
+
+# ================================================================================
+# Fallback _init_completion for systems without bash-completion package
+# ================================================================================
+
+# Provide minimal _init_completion if bash-completion is not available
+# This ensures the completion script works standalone
+if ! declare -F _init_completion &>/dev/null; then
+  _init_completion() {
+    # Basic variable initialization for bash completion
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    words=("${COMP_WORDS[@]}")
+    cword=$COMP_CWORD
+    return 0
+  }
+fi
+
+# Provide minimal _filedir if bash-completion is not available
+# This enables file completion with pattern matching
+if ! declare -F _filedir &>/dev/null; then
+  _filedir() {
+    local -- pattern="${1:-}"
+    if [[ -n $pattern ]]; then
+      # Pattern provided - use it for completion
+      # Convert @(md|markdown) pattern to shell glob
+      local -- glob_pattern
+      glob_pattern="${pattern//@(/@(}"  # Handle extglob patterns
+      COMPREPLY=($(compgen -f -X "!*.@(${pattern//[()@|]/})" -- "$cur"))
+      # Add directories for navigation
+      COMPREPLY+=($(compgen -d -- "$cur"))
+    else
+      # No pattern - complete all files and directories
+      COMPREPLY=($(compgen -f -- "$cur"))
+    fi
+  }
+fi
+
+# ================================================================================
+# Main Completion Function
+# ================================================================================
+
+# Main completion function for md2ansi and md commands
+# Handles option completion, argument completion, and file completion
+_md2ansi_completion() {
+  local cur prev words cword
+  _init_completion || return
+
+  # -------------------------------------------------------------------------------
+  # Handle options that require arguments
+
+  case "$prev" in
+    -w|--width)
+      # Suggest common terminal widths for the --width option
+      # Valid range is 20-500, but we suggest typical values
+      local -a common_widths=(60 80 100 120 140 160 180 200)
+      COMPREPLY=($(compgen -W "${common_widths[*]}" -- "$cur"))
+      return 0
+      ;;
+  esac
+
+  # -------------------------------------------------------------------------------
+  # Complete options when current word starts with dash
+
+  if [[ $cur == -* ]]; then
+    # All available options for md2ansi
+    local -a opts=(
+      # Short options
+      '-D'
+      '-h'
+      '-t'
+      '-V'
+      '-w'
+      # Long options
+      '--debug'
+      '--help'
+      '--plain'
+      '--version'
+      '--width'
+      # Feature toggle options
+      '--no-footnotes'
+      '--no-images'
+      '--no-links'
+      '--no-syntax-highlight'
+      '--no-tables'
+      '--no-task-lists'
+    )
+
+    COMPREPLY=($(compgen -W "${opts[*]}" -- "$cur"))
+    return 0
+  fi
+
+  # -------------------------------------------------------------------------------
+  # Default: Complete markdown files
+
+  # Prefer .md and .markdown files, but allow any file as fallback
+  # Use _filedir if available (from bash-completion), otherwise use compgen
+  if declare -F _filedir &>/dev/null; then
+    # bash-completion available - use _filedir with pattern
+    _filedir '@(md|markdown|MD|MARKDOWN)'
+  else
+    # Fallback: manual completion of markdown files
+    local -a md_files
+    # Complete .md and .markdown files
+    md_files=($(compgen -f -X '!*.@(md|markdown|MD|MARKDOWN)' -- "$cur"))
+    # Add directories for navigation
+    md_files+=($(compgen -d -- "$cur"))
+    # If no markdown files found, complete any file
+    if ((${#md_files[@]} == 0)); then
+      md_files=($(compgen -f -- "$cur"))
+    fi
+    COMPREPLY=("${md_files[@]}")
+  fi
+
+  return 0
+}
+
+# ================================================================================
+# Completion Registration
+# ================================================================================
+
+# Register completion function for all md2ansi command variants
+# This enables completion for:
+#   - md2ansi       (main executable)
+#   - md2ansi.bash  (symlink to main executable)
+#   - md            (pagination wrapper script)
+complete -F _md2ansi_completion md2ansi
+complete -F _md2ansi_completion md2ansi.bash
+complete -F _md2ansi_completion md
+
+#fin

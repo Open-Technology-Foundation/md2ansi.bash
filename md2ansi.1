@@ -1,0 +1,410 @@
+.TH MD2ANSI 1 "2025-11-03" "md2ansi 0.9.6-bash" "User Commands"
+.SH NAME
+md2ansi \- convert Markdown to ANSI-colored terminal output
+.SH SYNOPSIS
+.B md2ansi
+[\fIOPTIONS\fR] [\fIFILE\fR...]
+.SH DESCRIPTION
+.B md2ansi
+is a zero-dependency Bash implementation that converts Markdown documents to
+ANSI-colored terminal output. It reads Markdown from files or standard input
+and produces richly formatted output suitable for terminal viewing.
+.PP
+Unlike other Markdown renderers,
+.B md2ansi
+requires no external dependencies beyond standard POSIX/GNU utilities (tput,
+sed, awk, grep), making it ideal for deployment in minimal environments or as
+a single-file utility.
+.PP
+The tool supports comprehensive Markdown features including headers, lists,
+tables, code blocks with syntax highlighting, blockquotes, links, inline
+formatting, task lists, footnotes, and more. All features can be selectively
+disabled via command-line options.
+.SH OPTIONS
+.SS "Basic Options"
+.TP
+.BR \-h ", " \-\-help
+Display usage information and exit.
+.TP
+.BR \-V ", " \-\-version
+Display version information and exit.
+.TP
+.BR \-D ", " \-\-debug
+Enable debug mode with detailed trace output sent to stderr. Useful for
+troubleshooting rendering issues or understanding the parsing process.
+.TP
+.BR \-w ", " \-\-width " \fIWIDTH\fR"
+Force a specific terminal width instead of auto-detecting. Valid range is
+20-500 columns. Useful for generating output for specific display widths or
+when terminal detection fails.
+.TP
+.BR \-t ", " \-\-plain
+Enable plain text mode, disabling all ANSI formatting and colors. Output will
+be rendered as plain text suitable for non-terminal contexts or when colors
+are not desired.
+.SS "Feature Toggle Options"
+All markdown features are enabled by default. Use these options to disable
+specific features:
+.TP
+.B \-\-no\-footnotes
+Disable footnote processing. Footnote references and definitions will be
+rendered as plain text.
+.TP
+.B \-\-no\-syntax\-highlight
+Disable syntax highlighting in fenced code blocks. Code will be displayed in
+monochrome without language-specific coloring.
+.TP
+.B \-\-no\-tables
+Disable table formatting. Tables will be rendered as plain text without
+borders or column alignment.
+.TP
+.B \-\-no\-task\-lists
+Disable task list (checkbox) formatting. Task items will be rendered as
+regular list items without checkboxes.
+.TP
+.B \-\-no\-images
+Disable image placeholders. Image markup will be rendered as plain text
+instead of [IMG: alt] placeholders.
+.TP
+.B \-\-no\-links
+Disable link formatting. Links will be rendered as plain text without
+underlining or special formatting.
+.SH MARKDOWN FEATURES
+.B md2ansi
+supports a comprehensive set of Markdown elements:
+.SS "Headers"
+All heading levels H1 through H6 are supported with distinct color gradients:
+.PP
+.RS
+H1 \- Bright yellow
+.br
+H2 \- Orange
+.br
+H3 \- Green
+.br
+H4 \- Blue
+.br
+H5 \- Purple
+.br
+H6 \- Dark gray
+.RE
+.PP
+Inline formatting is supported within headers.
+.SS "Inline Formatting"
+.TP
+.B Bold
+Rendered using **text** or __text__
+.TP
+.I Italic
+Rendered using *text* or _text_
+.TP
+.BI "Bold Italic"
+Rendered using ***text***
+.TP
+.B Strikethrough
+Rendered using ~~text~~
+.TP
+.B Inline Code
+Rendered using `code` in monospace
+.TP
+.B Links
+Rendered using [text](url) with underline and cyan color
+.TP
+.B Images
+Rendered using ![alt](url) as [IMG: alt] placeholders
+.SS "Lists"
+.TP
+.B Unordered Lists
+Using - or * markers with proper indentation
+.TP
+.B Ordered Lists
+Using 1., 2., etc. with automatic numbering
+.TP
+.B Task Lists
+Using - [ ] (unchecked) and - [x] (checked) with checkbox symbols
+.TP
+.B Nested Lists
+Full support for nested lists with proper indentation handling
+.SS "Tables"
+Pipe-delimited tables with:
+.RS
+.IP \(bu 2
+Column alignment: :--- (left), :---: (center), ---: (right)
+.IP \(bu 2
+Automatic column sizing
+.IP \(bu 2
+Proper borders and separators
+.IP \(bu 2
+Inline formatting within cells
+.RE
+.SS "Code Blocks"
+Fenced code blocks using ``` or ~~~ with:
+.RS
+.IP \(bu 2
+Language specification support
+.IP \(bu 2
+Syntax highlighting for Python, JavaScript, Bash/Shell
+.IP \(bu 2
+Keyword, string, number, comment, and function highlighting
+.IP \(bu 2
+Language aliases (py, js, sh, shell, bash)
+.RE
+.SS "Additional Elements"
+.TP
+.B Blockquotes
+Using > prefix with dark background highlighting
+.TP
+.B Horizontal Rules
+Using ---, ===, or ___ (three or more)
+.TP
+.B Footnotes
+Using [^1] references and [^1]: definition syntax, rendered at document end
+.SH COLOR SCHEME
+.B md2ansi
+uses a carefully designed ANSI color palette for optimal terminal readability:
+.SS "Element Colors"
+.RS
+.IP "Regular text" 16
+Light gray (ANSI 38;5;7)
+.IP "Code blocks" 16
+Dark gray (ANSI 90)
+.IP "Lists" 16
+Cyan (ANSI 36)
+.IP "Links" 16
+Cyan-blue (ANSI 38;5;45) with underline
+.IP "Blockquotes" 16
+Dark background (ANSI 48;5;236)
+.IP "Horizontal rules" 16
+Cyan (ANSI 36)
+.IP "Tables" 16
+Dark gray (ANSI 90)
+.RE
+.SS "Syntax Highlighting Colors"
+.RS
+.IP "Keywords" 16
+Pink/Magenta (ANSI 38;5;204)
+.IP "Strings" 16
+Green (ANSI 38;5;114)
+.IP "Numbers" 16
+Yellow (ANSI 38;5;220)
+.IP "Comments" 16
+Dark gray (ANSI 38;5;245)
+.IP "Functions" 16
+Cyan (ANSI 38;5;81)
+.IP "Classes" 16
+Orange (ANSI 38;5;214)
+.IP "Built-ins" 16
+Light purple (ANSI 38;5;147)
+.RE
+.SH EXAMPLES
+.SS "Basic Usage"
+View a Markdown file with ANSI colors:
+.PP
+.RS
+.nf
+md2ansi README.md
+.fi
+.RE
+.SS "With Pagination"
+Use the companion
+.B md
+wrapper for comfortable viewing with pagination:
+.PP
+.RS
+.nf
+md README.md
+.fi
+.RE
+.PP
+The
+.B md
+command automatically pipes output to
+.BR less (1)
+with appropriate options for ANSI color support.
+.SS "From Standard Input"
+Process Markdown from a pipe or heredoc:
+.PP
+.RS
+.nf
+echo "# Hello **World**" | md2ansi
+cat document.md | md2ansi
+.fi
+.RE
+.SS "Multiple Files"
+Process multiple files with separation:
+.PP
+.RS
+.nf
+md2ansi file1.md file2.md file3.md
+.fi
+.RE
+.SS "Custom Terminal Width"
+Force specific width for output:
+.PP
+.RS
+.nf
+md2ansi --width 100 README.md
+.fi
+.RE
+.SS "Debug Mode"
+Enable detailed trace output:
+.PP
+.RS
+.nf
+md2ansi --debug README.md 2>debug.log
+.fi
+.RE
+.SS "Disable Specific Features"
+Disable tables and syntax highlighting:
+.PP
+.RS
+.nf
+md2ansi --no-tables --no-syntax-highlight README.md
+.fi
+.RE
+.SS "Plain Text Mode"
+Generate plain text output without colors:
+.PP
+.RS
+.nf
+md2ansi --plain README.md > output.txt
+.fi
+.RE
+.SS "Integration with Other Tools"
+Use in shell scripts or pipelines:
+.PP
+.RS
+.nf
+curl https://example.com/README.md | md2ansi | less -R
+git log --format=%B | md2ansi
+.fi
+.RE
+.SH SECURITY
+.B md2ansi
+includes several security features to handle untrusted input safely:
+.SS "File Size Limits"
+Maximum file size is limited to 10MB (configurable via MAX_FILE_SIZE in the
+script). This prevents memory exhaustion from extremely large files.
+.SS "Line Length Limits"
+Individual lines are limited to 100KB to prevent denial-of-service via
+extremely long lines.
+.SS "ReDoS Protection"
+Regular expression operations are wrapped with timeout command (1 second
+limit) to prevent Regular Expression Denial of Service attacks.
+.SS "Input Sanitization"
+All input is sanitized to remove ANSI escape sequences, preventing terminal
+injection attacks.
+.SS "Signal Handling"
+Proper signal handlers ensure cleanup on interruption (Ctrl-C) with graceful
+exit codes.
+.SS "Permission Validation"
+File read permissions are validated before processing with clear error
+messages for inaccessible files.
+.SH PERFORMANCE
+.B md2ansi
+is optimized for terminal viewing responsiveness rather than batch processing
+speed:
+.PP
+.RS
+Startup time: ~50ms (Bash initialization)
+.br
+Processing: ~2-3x slower than equivalent Python implementations
+.br
+Memory: Very low (efficient line-by-line processing)
+.br
+File limit: 10MB maximum
+.RE
+.PP
+For large files or batch processing, consider using the Python version
+.BR md2ansi .
+.SH FILES
+.TP
+.I md2ansi
+Main executable (monolithic single-file implementation)
+.TP
+.I md
+Pagination wrapper script that pipes md2ansi output to less -R
+.TP
+.I md2ansi.bash_completion
+Bash completion script for md2ansi, md2ansi.bash, and md commands
+.TP
+.I display-ansi-palette
+Utility to display all 256 ANSI colors supported by the terminal
+.TP
+.I md-link-extract
+Utility to extract and list all URLs from markdown files
+.SH ENVIRONMENT
+.TP
+.B TERM
+Terminal type, used for capability detection via tput
+.TP
+.B COLUMNS
+Terminal width in columns. If not set, auto-detected via tput cols or stty
+size
+.TP
+.B LESS
+Options passed to less when using the md wrapper. The wrapper sets -FXRS by
+default (auto-exit, no init, raw ANSI, no line wrap)
+.SH EXIT STATUS
+.TP
+.B 0
+Success - all files processed without errors
+.TP
+.B 1
+General error - invalid arguments, file not found, or processing failure
+.TP
+.B 2
+Usage error - invalid options or arguments
+.TP
+.B 130
+Interrupted - user pressed Ctrl-C during processing
+.SH SEE ALSO
+.BR less (1),
+.BR pandoc (1),
+.BR markdown (7),
+.BR groff (1),
+.BR man (1)
+.PP
+Full documentation and source code:
+.br
+https://github.com/Open-Technology-Foundation/md2ansi.bash
+.SH BUGS
+.SS "Known Limitations"
+.IP \(bu 2
+Nested inline formatting (e.g., bold within italic) may not render correctly
+in all cases
+.IP \(bu 2
+Complex table layouts with merged cells or unusual formatting are not
+supported
+.IP \(bu 2
+Some Unicode characters may not display correctly depending on terminal font
+support
+.IP \(bu 2
+Syntax highlighting is line-based and simpler than token-based highlighters
+.IP \(bu 2
+Performance is ~2-3x slower than Python implementation for large files
+.PP
+Report bugs at:
+.br
+https://github.com/Open-Technology-Foundation/md2ansi.bash/issues
+.SH AUTHOR
+Written by Gary Dean (Biksu Okusi) for the Open Technology Foundation.
+.PP
+Based on concepts from the Python
+.B md2ansi
+implementation, reimplemented in pure Bash following the Bash Coding Standard
+(BCS).
+.SH LICENSE
+Copyright \(co 2024 Open Technology Foundation
+.PP
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+.PP
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+.PP
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <https://www.gnu.org/licenses/>.
