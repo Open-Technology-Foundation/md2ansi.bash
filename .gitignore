@@ -2,6 +2,8 @@
 BASH-CODING-STANDARD.md
 CLAUDE.md
 .claude
+.git*
+.symlink
 
 # Python
 __pycache__/
