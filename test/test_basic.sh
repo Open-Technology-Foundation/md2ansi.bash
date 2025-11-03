@@ -97,6 +97,30 @@ assert_contains "$output" "Test" "File processing works"
 rm -f /tmp/md2ansi_test.md
 
 # --------------------------------------------------------------------------------
+# Nested formatting
+
+output=$(echo "**_bold and italic_**" | ./md2ansi)
+assert_contains "$output" "bold and italic" "Bold and italic combined"
+
+output=$(echo "*__italic and bold__*" | ./md2ansi)
+assert_contains "$output" "italic and bold" "Italic and bold combined (alt syntax)"
+
+output=$(echo "**bold with *nested italic* inside**" | ./md2ansi)
+assert_contains "$output" "nested italic" "Italic nested in bold"
+
+output=$(echo "*italic with **nested bold** inside*" | ./md2ansi)
+assert_contains "$output" "nested bold" "Bold nested in italic"
+
+output=$(echo "**bold [link](url) text**" | ./md2ansi)
+assert_contains "$output" "link" "Link inside bold"
+
+output=$(echo "*italic \`code\` text*" | ./md2ansi)
+assert_contains "$output" "code" "Code inside italic"
+
+output=$(echo "**bold ~~strike~~ text**" | ./md2ansi)
+assert_contains "$output" "strike" "Strikethrough inside bold"
+
+# --------------------------------------------------------------------------------
 # Error handling
 
 assert_exit_code 1 "./md2ansi /nonexistent/file.md 2>&1" "Non-existent file returns error"

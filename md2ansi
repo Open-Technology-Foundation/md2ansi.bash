@@ -1178,11 +1178,12 @@ parse_markdown() {
     if ((OPTIONS[footnotes])); then
       while [[ $line =~ \[\^([^]]+)\] ]]; do
         local -- ref_id="${BASH_REMATCH[1]}"
+        local -- ref_match="${BASH_REMATCH[0]}"
         if [[ ! " ${FOOTNOTE_REFS[*]} " =~ " ${ref_id} " ]]; then
           FOOTNOTE_REFS+=("$ref_id")
         fi
         # Remove matched part to find next
-        line="${line/${BASH_REMATCH[0]}/}"
+        line="${line/${ref_match}/}"
       done
       line="$original_line"  # Restore for colorization
     fi
@@ -1304,8 +1305,8 @@ parse_arguments() {
       -w|--width)
         noarg "$@"
         shift
+        [[ $1 =~ ^[0-9]+$ ]] || die 22 "Invalid width ${1@Q}"
         TERM_WIDTH="$1"
-        [[ $TERM_WIDTH =~ ^[0-9]+$ ]] || die 22 "Invalid width ${TERM_WIDTH@Q}"
         ((TERM_WIDTH >= 20 && TERM_WIDTH <= 500)) || die 22 "Width must be between 20 and 500"
         ;;
       -D|--debug)

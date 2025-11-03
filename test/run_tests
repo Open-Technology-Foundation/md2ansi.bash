@@ -105,6 +105,24 @@ assert_exit_code() {
   fi
 }
 
+assert_pass() {
+  local -- test_name="${1:-assertion}"
+
+  TESTS_RUN+=1
+  TESTS_PASSED+=1
+  echo "${GREEN}✓${NC} $test_name"
+  return 0
+}
+
+assert_fail() {
+  local -- test_name="${1:-assertion}"
+
+  TESTS_RUN+=1
+  TESTS_FAILED+=1
+  echo "${RED}✗${NC} $test_name"
+  return 1
+}
+
 # --------------------------------------------------------------------------------
 # Test section headers
 
@@ -120,8 +138,8 @@ test_section() {
 main() {
   echo ""
   echo "${YELLOW}╔════════════════════════════════════════════════════════════╗${NC}"
-  echo "${YELLOW}║         MD2ANSI Bash Implementation Test Suite            ║${NC}"
-  echo "${YELLOW}╔════════════════════════════════════════════════════════════╗${NC}"
+  echo "${YELLOW}║           MD2ANSI Bash Implementation Test Suite           ║${NC}"
+  echo "${YELLOW}╚════════════════════════════════════════════════════════════╝${NC}"
   echo ""
 
   # Change to project directory
@@ -141,7 +159,7 @@ main() {
   # Print summary
   echo ""
   echo "${YELLOW}╔════════════════════════════════════════════════════════════╗${NC}"
-  echo "${YELLOW}║                       Test Summary                         ║${NC}"
+  echo "${YELLOW}║                        Test Summary                        ║${NC}"
   echo "${YELLOW}╚════════════════════════════════════════════════════════════╝${NC}"
   echo ""
   echo "  Tests run:    $TESTS_RUN"
