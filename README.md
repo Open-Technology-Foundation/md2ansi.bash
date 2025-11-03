@@ -50,7 +50,7 @@ make install
 This installs to `/usr/local` by default:
 - Executables → `/usr/local/bin/`
 - Man page → `/usr/local/share/man/man1/`
-- Bash completion → `/etc/bash_completion.d/`
+- Bash completion → `/usr/local/share/bash-completion/completions/`
 
 **User-local installation** (no sudo required):
 
@@ -122,7 +122,7 @@ sudo install -m 0644 md2ansi.1 /usr/local/share/man/man1/
 sudo mandb  # Update man database
 
 # Install bash completion
-sudo install -m 0644 md2ansi.bash_completion /etc/bash_completion.d/
+sudo install -m 0644 md2ansi.bash_completion /usr/local/share/bash-completion/completions/md2ansi
 
 # Verify installation
 md2ansi --version
@@ -150,8 +150,8 @@ Add to `~/.bashrc` or `~/.bash_profile` to make permanent.
 Add to `~/.bashrc`:
 
 ```bash
-if [ -f ~/.local/share/bash-completion/completions/md2ansi.bash_completion ]; then
-  . ~/.local/share/bash-completion/completions/md2ansi.bash_completion
+if [ -f ~/.local/share/bash-completion/completions/md2ansi ]; then
+  . ~/.local/share/bash-completion/completions/md2ansi
 fi
 ```
 

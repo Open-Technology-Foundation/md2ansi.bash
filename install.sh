@@ -238,7 +238,7 @@ install_files() {
 
   # Install bash completion
   info "Installing bash completion..."
-  local completion_target="${completiondir}/md2ansi.bash_completion"
+  local completion_target="${completiondir}/md2ansi"
   install -m 0644 "${SCRIPT_DIR}/md2ansi.bash_completion" "$completion_target" || \
     die "Failed to install bash completion"
   INSTALLED_FILES+=("$completion_target")
@@ -278,8 +278,8 @@ show_post_install() {
     echo "  ${COLOR_CYAN}export PATH=\"\$HOME/.local/bin:\$PATH\"${COLOR_RESET}"
     echo ""
     warn "To enable bash completion, add to ${COLOR_BOLD}~/.bashrc${COLOR_RESET}:"
-    echo "  ${COLOR_CYAN}if [ -f ~/.local/share/bash-completion/completions/md2ansi.bash_completion ]; then${COLOR_RESET}"
-    echo "  ${COLOR_CYAN}  . ~/.local/share/bash-completion/completions/md2ansi.bash_completion${COLOR_RESET}"
+    echo "  ${COLOR_CYAN}if [ -f ~/.local/share/bash-completion/completions/md2ansi ]; then${COLOR_RESET}"
+    echo "  ${COLOR_CYAN}  . ~/.local/share/bash-completion/completions/md2ansi${COLOR_RESET}"
     echo "  ${COLOR_CYAN}fi${COLOR_RESET}"
     echo ""
     info "Restart your shell or source ~/.bashrc to apply changes"
@@ -354,7 +354,7 @@ main() {
   case "$install_type" in
     system)
       prefix="/usr/local"
-      completiondir="/etc/bash_completion.d"
+      completiondir="${prefix}/share/bash-completion/completions"
 
       # Check if we need sudo
       if [[ ! -w "$prefix" ]] && (( EUID != 0 )); then

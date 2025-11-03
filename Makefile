@@ -6,10 +6,10 @@
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 MANDIR ?= $(PREFIX)/share/man/man1
-COMPLETIONDIR ?= /etc/bash_completion.d
+COMPLETIONDIR ?= $(PREFIX)/share/bash-completion/completions
 
 # For user-local installation, use:
-# make install PREFIX=~/.local COMPLETIONDIR=~/.local/share/bash-completion/completions
+# make install-local (automatically uses ~/.local paths)
 
 # Source files
 MAIN_SCRIPT = md2ansi
@@ -65,7 +65,7 @@ install:
 	$(INSTALL_DATA) $(MANPAGE) $(MANDIR)/
 
 	@echo "  Installing bash completion to $(COMPLETIONDIR)..."
-	$(INSTALL_DATA) $(COMPLETION) $(COMPLETIONDIR)/
+	$(INSTALL_DATA) $(COMPLETION) $(COMPLETIONDIR)/md2ansi
 
 	@echo "  Updating man database..."
 	-mandb 2>/dev/null || true
@@ -102,7 +102,7 @@ uninstall:
 	$(RM_F) $(BINDIR)/$(WRAPPER_SCRIPT)
 	$(RM_F) $(addprefix $(BINDIR)/,$(UTILITIES))
 	$(RM_F) $(MANDIR)/$(MANPAGE)
-	$(RM_F) $(COMPLETIONDIR)/$(COMPLETION)
+	$(RM_F) $(COMPLETIONDIR)/md2ansi
 
 	@echo "  Updating man database..."
 	-mandb 2>/dev/null || true
