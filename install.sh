@@ -13,7 +13,7 @@ shopt -s inherit_errexit shift_verbose extglob nullglob
 
 # Script metadata
 declare -r SCRIPT_NAME="${0##*/}"
-declare -r SCRIPT_VERSION="0.9.6-bash"
+declare -r SCRIPT_VERSION="1.0.0"
 declare SCRIPT_DIR
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 declare -r SCRIPT_DIR

@@ -1,6 +1,6 @@
 # MD2ANSI (Bash Implementation)
 
-![Version](https://img.shields.io/badge/version-0.9.6--bash-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-GPL--3.0-green.svg)
 ![Shell](https://img.shields.io/badge/bash-5.2+-orange.svg)
 ![Status](https://img.shields.io/badge/status-stable-brightgreen.svg)
@@ -1138,6 +1138,6 @@ See [LICENSE](LICENSE) file for full text.
 
 **Status**: ✓ Core implementation complete and functional
 
-**Version**: 0.9.6-bash
+**Version**: 1.0.0
 
 #fin
