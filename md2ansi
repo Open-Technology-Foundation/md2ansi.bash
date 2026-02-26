@@ -466,8 +466,8 @@ render_list_item() {
 
   # Calculate indentation level (every 2 spaces = 1 level)
   indent_level=$((${#indent} / 2))
-  bullet_indent=$(printf '  %.0s' $(seq 1 "$indent_level"))
-  text_indent=$(printf '  %.0s' $(seq 1 $((indent_level + 1))))
+  printf -v bullet_indent '%*s' $((indent_level * 2)) ''
+  printf -v text_indent '%*s' $(((indent_level + 1) * 2)) ''
 
   # Apply inline formatting
   formatted_content=$(colorize_line "$content")
@@ -498,9 +498,10 @@ render_ordered_item() {
 
   # Calculate indentation
   indent_level=$((${#indent} / 2))
-  number_indent=$(printf '  %.0s' $(seq 1 "$indent_level"))
+  printf -v number_indent '%*s' $((indent_level * 2)) ''
   number_width=$((${#number} + 2))  # number + ". "
-  text_indent="${number_indent}$(printf ' %.0s' $(seq 1 "$number_width"))"
+  printf -v text_indent '%*s' "$number_width" ''
+  text_indent="${number_indent}${text_indent}"
 
   # Apply inline formatting
   formatted_content=$(colorize_line "$content")
@@ -531,8 +532,9 @@ render_task_item() {
 
   # Calculate indentation
   indent_level=$((${#indent} / 2))
-  bullet_indent=$(printf '  %.0s' $(seq 1 "$indent_level"))
-  text_indent=$(printf '  %.0s' $(seq 1 $((indent_level + 1))))"     "  # 5 extra for "[ ] "
+  printf -v bullet_indent '%*s' $((indent_level * 2)) ''
+  printf -v text_indent '%*s' $(((indent_level + 1) * 2)) ''
+  text_indent+="     "  # 5 extra for "[ ] "
 
   # Format checkbox
   if [[ $status == 'x' ]]; then
@@ -589,7 +591,8 @@ render_blockquote() {
 render_hr() {
   local -i term_width=$1
   local -- rule
-  rule=$(printf '─%.0s' $(seq 1 $((term_width - 1))))
+  printf -v rule '%*s' $((term_width - 1)) ''
+  rule=${rule// /─}
   printf '%s%s%s\n' "$COLOR_HR" "$rule" "$ANSI_RESET"
 }
 
@@ -905,7 +908,9 @@ _render_table_output() {
   horiz_line='+'
   for ((i=0; i<_col_count; i+=1)); do
     width=${_col_widths[i]}
-    horiz_line+=$(printf -- '-%.0s' $(seq 1 $((width + 2))))
+    local -- dashes
+    printf -v dashes '%*s' $((width + 2)) ''
+    horiz_line+=${dashes// /-}
     horiz_line+='+'
   done
 
@@ -1020,6 +1025,12 @@ parse_markdown() {
   FOOTNOTE_REFS=()
 
   local -- fence lang_spec
+  local -- formatted_line quote_content
+  local -- hashes header_text
+  local -- indent status task_content list_content number
+  local -- footnote_id footnote_text
+  local -- ref_id ref_match
+  local -a wrapped
   while ((i < ${#_lines[@]})); do
     line="${_lines[i]}"
     original_line="$line"
@@ -1037,11 +1048,16 @@ parse_markdown() {
       lang_spec=${lang_spec%% }  # Trim trailing spaces
 
       if ((IN_CODE_BLOCK)); then
-        # Closing fence
-        printf '%s%s%s\n' "$COLOR_CODEBLOCK" "$fence" "$ANSI_RESET"
-        IN_CODE_BLOCK=0
-        CODE_FENCE_TYPE=''
-        CODE_LANG=''
+        if [[ $fence == "$CODE_FENCE_TYPE" ]]; then
+          # Closing fence (must match opening fence type per CommonMark)
+          printf '%s%s%s\n' "$COLOR_CODEBLOCK" "$fence" "$ANSI_RESET"
+          IN_CODE_BLOCK=0
+          CODE_FENCE_TYPE=''
+          CODE_LANG=''
+        else
+          # Mismatched fence inside code block — render as code content
+          render_code_line "$line" "$CODE_LANG"
+        fi
       else
         # Opening fence
         IN_CODE_BLOCK=1
@@ -1070,7 +1086,6 @@ parse_markdown() {
       continue
     elif [[ $line =~ ^[[:space:]]*\| ]] && ((OPTIONS[tables] == 0)); then
       # Tables disabled but looks like a table - treat as plain text
-      local -- formatted_line
       formatted_line=$(colorize_line "$line")
       readarray -t wrapped < <(wrap_text "${COLOR_TEXT}${formatted_line}" "$TERM_WIDTH")
       printf '%s\n' "${wrapped[@]}"
@@ -1089,7 +1104,7 @@ parse_markdown() {
     # --------------------------------------------------------------------------------
     # BLOCKQUOTES: Lines starting with >
     if [[ $line =~ ^[[:space:]]*\>[[:space:]]?(.*)$ ]]; then
-      local -- quote_content="${BASH_REMATCH[1]}"
+      quote_content="${BASH_REMATCH[1]}"
       render_blockquote "$quote_content" "$TERM_WIDTH"
       i+=1
       continue
@@ -1098,8 +1113,8 @@ parse_markdown() {
     # --------------------------------------------------------------------------------
     # HEADERS: # through ######
     if [[ $line =~ ^(#{1,6})[[:space:]]+(.+)$ ]]; then
-      local -- hashes="${BASH_REMATCH[1]}"
-      local -- header_text="${BASH_REMATCH[2]}"
+      hashes="${BASH_REMATCH[1]}"
+      header_text="${BASH_REMATCH[2]}"
       render_header "$hashes" "$header_text"
       i+=1
       continue
@@ -1108,9 +1123,9 @@ parse_markdown() {
     # --------------------------------------------------------------------------------
     # TASK LISTS: - [ ] or - [x]
     if [[ $line =~ ^([[:space:]]*)[-*][[:space:]]+\[([[:space:]x])\][[:space:]]+(.+)$ ]]; then
-      local -- indent="${BASH_REMATCH[1]}"
-      local -- status="${BASH_REMATCH[2]}"
-      local -- task_content="${BASH_REMATCH[3]}"
+      indent="${BASH_REMATCH[1]}"
+      status="${BASH_REMATCH[2]}"
+      task_content="${BASH_REMATCH[3]}"
 
       if ((OPTIONS[task_lists])); then
         render_task_item "$indent" "$status" "$task_content" "$TERM_WIDTH"
@@ -1125,8 +1140,8 @@ parse_markdown() {
     # --------------------------------------------------------------------------------
     # UNORDERED LISTS: - or *
     if [[ $line =~ ^([[:space:]]*)[-*][[:space:]]+(.+)$ ]]; then
-      local -- indent="${BASH_REMATCH[1]}"
-      local -- list_content="${BASH_REMATCH[2]}"
+      indent="${BASH_REMATCH[1]}"
+      list_content="${BASH_REMATCH[2]}"
       render_list_item "$indent" "$list_content" "$TERM_WIDTH"
       i+=1
       continue
@@ -1135,9 +1150,9 @@ parse_markdown() {
     # --------------------------------------------------------------------------------
     # ORDERED LISTS: 1. 2. etc.
     if [[ $line =~ ^([[:space:]]*)([0-9]+)\.[[:space:]]+(.+)$ ]]; then
-      local -- indent="${BASH_REMATCH[1]}"
-      local -- number="${BASH_REMATCH[2]}"
-      local -- list_content="${BASH_REMATCH[3]}"
+      indent="${BASH_REMATCH[1]}"
+      number="${BASH_REMATCH[2]}"
+      list_content="${BASH_REMATCH[3]}"
       render_ordered_item "$indent" "$number" "$list_content" "$TERM_WIDTH"
       i+=1
       continue
@@ -1146,14 +1161,14 @@ parse_markdown() {
     # --------------------------------------------------------------------------------
     # FOOTNOTE DEFINITIONS: [^id]: text
     if [[ $line =~ ^\[\^([^]]+)\]:[[:space:]]+(.+)$ ]] && ((OPTIONS[footnotes])); then
-      local -- footnote_id="${BASH_REMATCH[1]}"
-      local -- footnote_text="${BASH_REMATCH[2]}"
+      footnote_id="${BASH_REMATCH[1]}"
+      footnote_text="${BASH_REMATCH[2]}"
 
       # Store footnote
       FOOTNOTES[$footnote_id]="$footnote_text"
 
       # Track reference order
-      if [[ ! " ${FOOTNOTE_REFS[*]} " =~ " ${footnote_id} " ]]; then
+      if [[ " ${FOOTNOTE_REFS[*]} " != *" ${footnote_id} "* ]]; then
         FOOTNOTE_REFS+=("$footnote_id")
       fi
 
@@ -1172,16 +1187,13 @@ parse_markdown() {
 
     # --------------------------------------------------------------------------------
     # REGULAR TEXT - with inline formatting
-    local -- formatted_line
-    local -a wrapped
 
     # Find and track footnote references in text
     if ((OPTIONS[footnotes])); then
-      local -- ref_id ref_match
       while [[ $line =~ \[\^([^]]+)\] ]]; do
         ref_id="${BASH_REMATCH[1]}"
         ref_match="${BASH_REMATCH[0]}"
-        if [[ ! " ${FOOTNOTE_REFS[*]} " =~ " ${ref_id} " ]]; then
+        if [[ " ${FOOTNOTE_REFS[*]} " != *" ${ref_id} "* ]]; then
           FOOTNOTE_REFS+=("$ref_id")
         fi
         # Remove matched part to find next
@@ -1353,11 +1365,11 @@ parse_arguments() {
         (($#==0)) || INPUT_FILES+=("$@")
         break
         ;;
-      -[wDVht]*)
-        # Split combined short options: -Dv -> -D -v
-        #shellcheck disable=SC2046
-        set -- '' $(printf -- '-%c ' $(grep -o . <<<"${1:1}")) "${@:2}"
+      -[wDVht]?*) # Bundled short options
+        set -- "${1:0:2}" "-${1:2}" "${@:2}"
+        continue
         ;;
+
       -*)
         die 22 "Invalid option ${1@Q}"
         ;;
@@ -1386,14 +1398,13 @@ process_file() {
     # Read file into array, handling encoding issues
     while IFS= read -r line || [[ -n "$line" ]]; do
       # Skip shebang to prevent treating it as markdown content
-      [[ ${#lines[@]} -eq 0 && "$line" =~ ^\#! ]] && continue ||:
+      ((${#lines[@]} == 0)) && [[ "$line" =~ ^\#! ]] && continue ||:
       lines+=("$line")
     done <"$filepath"
   else
     # Process stdin
     debug 'Processing stdin'
     local -i byte_count=0
-    local -- chunk
 
     # Read stdin with size limit
     while IFS= read -r line || [[ -n "$line" ]]; do
@@ -1405,7 +1416,7 @@ process_file() {
       fi
 
       # Skip shebang to prevent treating it as markdown content
-      [[ ${#lines[@]} -eq 0 && "$line" =~ ^\#! ]] && continue ||:
+      ((${#lines[@]} == 0)) && [[ "$line" =~ ^\#! ]] && continue ||:
       lines+=("$line")
     done
   fi

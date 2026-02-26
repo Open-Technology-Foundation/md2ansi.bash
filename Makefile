@@ -36,7 +36,7 @@ all:
 	@echo "  install        - Install to system directories (requires sudo)"
 	@echo "  install-local  - Install to ~/.local (no sudo required)"
 	@echo "  uninstall      - Remove installed files from system"
-	@echo "  test           - Run shellcheck validation"
+	@echo "  test           - Run shellcheck and test suite"
 	@echo "  clean          - Remove temporary files"
 	@echo "  help           - Show this help message"
 	@echo ""
@@ -91,8 +91,8 @@ install-local:
 	@echo "  export PATH=\"\$$HOME/.local/bin:\$$PATH\""
 	@echo ""
 	@echo "To enable bash completion, add to ~/.bashrc:"
-	@echo "  if [ -f ~/.local/share/bash-completion/completions/md2ansi.bash_completion ]; then"
-	@echo "    . ~/.local/share/bash-completion/completions/md2ansi.bash_completion"
+	@echo "  if [ -f ~/.local/share/bash-completion/completions/md2ansi ]; then"
+	@echo "    . ~/.local/share/bash-completion/completions/md2ansi"
 	@echo "  fi"
 
 # Uninstall from system
@@ -109,7 +109,7 @@ uninstall:
 
 	@echo "Uninstallation complete!"
 
-# Run shellcheck validation
+# Run shellcheck validation and test suite
 test:
 	@echo "Running shellcheck validation..."
 	@if command -v shellcheck >/dev/null 2>&1; then \
@@ -119,8 +119,10 @@ test:
 	else \
 		echo "Warning: shellcheck not found. Install it for validation."; \
 		echo "  Debian/Ubuntu: sudo apt-get install shellcheck"; \
-		echo "  macOS: brew install shellcheck"; \
 	fi
+	@echo ""
+	@echo "Running test suite..."
+	@test/run_tests
 
 # Clean temporary files
 clean:

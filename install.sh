@@ -13,38 +13,39 @@ shopt -s inherit_errexit shift_verbose extglob nullglob
 
 # Script metadata
 declare -r SCRIPT_NAME="${0##*/}"
-declare -r SCRIPT_VERSION="1.0.0"
-declare SCRIPT_DIR
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-declare -r SCRIPT_DIR
+declare -r SCRIPT_VERSION="1.0.1"
+declare SCRIPT_PATH
+SCRIPT_PATH=$(readlink -en -- "${BASH_SOURCE[0]}")
+declare -r SCRIPT_PATH
+declare -r SCRIPT_DIR=${SCRIPT_PATH%/*}
 
 # ANSI color codes
-declare -r COLOR_RESET='\033[0m'
-declare -r COLOR_BOLD='\033[1m'
-declare -r COLOR_RED='\033[31m'
-declare -r COLOR_GREEN='\033[32m'
-declare -r COLOR_YELLOW='\033[33m'
-declare -r COLOR_BLUE='\033[34m'
-declare -r COLOR_CYAN='\033[36m'
+declare -r COLOR_RESET=$'\033[0m'
+declare -r COLOR_BOLD=$'\033[1m'
+declare -r COLOR_RED=$'\033[31m'
+declare -r COLOR_GREEN=$'\033[32m'
+declare -r COLOR_YELLOW=$'\033[33m'
+declare -r COLOR_BLUE=$'\033[34m'
+declare -r COLOR_CYAN=$'\033[36m'
 
 # Installation state tracking
 declare -a INSTALLED_FILES=()
 
 # Messaging functions
 error() {
-  echo -e "${COLOR_RED}✗ Error:${COLOR_RESET} $*" >&2
+  echo "${COLOR_RED}✗ Error:${COLOR_RESET} $*" >&2
 }
 
 warn() {
-  echo -e "${COLOR_YELLOW}▲ Warning:${COLOR_RESET} $*" >&2
+  echo "${COLOR_YELLOW}▲ Warning:${COLOR_RESET} $*" >&2
 }
 
 info() {
-  echo -e "${COLOR_BLUE}◉ Info:${COLOR_RESET} $*"
+  echo "${COLOR_BLUE}◉ Info:${COLOR_RESET} $*"
 }
 
 success() {
-  echo -e "${COLOR_GREEN}✓ Success:${COLOR_RESET} $*"
+  echo "${COLOR_GREEN}✓ Success:${COLOR_RESET} $*"
 }
 
 die() {
@@ -70,12 +71,12 @@ trap cleanup_on_failure ERR EXIT
 
 # Display header
 show_header() {
-  echo -e "${COLOR_BOLD}${COLOR_CYAN}"
+  echo "${COLOR_BOLD}${COLOR_CYAN}"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo "  md2ansi.bash Installation Script"
   echo "  Version: ${SCRIPT_VERSION}"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo -e "${COLOR_RESET}"
+  echo "${COLOR_RESET}"
 }
 
 # Display usage
@@ -114,7 +115,7 @@ check_prerequisites() {
   info "Checking prerequisites..."
 
   # Check for required files
-  declare -a required_files=(
+  local -a required_files=(
     "md2ansi"
     "md"
     "md2ansi.1"
@@ -136,8 +137,7 @@ check_prerequisites() {
     return 0
   else
     warn "shellcheck not found - skipping validation"
-    warn "  Install: sudo apt-get install shellcheck (Debian/Ubuntu)"
-    warn "           brew install shellcheck (macOS)"
+    warn "  Install: sudo apt-get install shellcheck"
   fi
 }
 
@@ -148,7 +148,7 @@ validate_scripts() {
   fi
 
   info "Validating scripts with shellcheck..."
-  declare -a scripts=("md2ansi" "md" "display-ansi-palette" "md-link-extract")
+  local -a scripts=("md2ansi" "md" "display-ansi-palette" "md-link-extract")
 
   local script
   for script in "${scripts[@]}"; do
@@ -163,36 +163,40 @@ validate_scripts() {
 
 # Prompt user for installation type
 prompt_installation_type() {
-  echo ""
-  info "Select installation type:"
-  echo "  1) System-wide installation (${COLOR_BOLD}/usr/local${COLOR_RESET}) - requires sudo"
-  echo "  2) User-local installation (${COLOR_BOLD}~/.local${COLOR_RESET}) - no sudo required"
-  echo "  3) Custom prefix - specify your own location"
-  echo "  4) Cancel installation"
-  echo ""
-
   local choice
-  read -rp "Enter choice [1-4]: " choice
+  while true; do
+    echo ""
+    info "Select installation type:"
+    echo "  1) System-wide installation (${COLOR_BOLD}/usr/local${COLOR_RESET}) - requires sudo"
+    echo "  2) User-local installation (${COLOR_BOLD}~/.local${COLOR_RESET}) - no sudo required"
+    echo "  3) Custom prefix - specify your own location"
+    echo "  4) Cancel installation"
+    echo ""
 
-  case "$choice" in
-    1)
-      echo "system"
-      ;;
-    2)
-      echo "user"
-      ;;
-    3)
-      echo "custom"
-      ;;
-    4)
-      info "Installation cancelled by user"
-      exit 0
-      ;;
-    *)
-      error "Invalid choice: $choice"
-      prompt_installation_type
-      ;;
-  esac
+    read -rp "Enter choice [1-4]: " choice
+
+    case "$choice" in
+      1)
+        echo "system"
+        return
+        ;;
+      2)
+        echo "user"
+        return
+        ;;
+      3)
+        echo "custom"
+        return
+        ;;
+      4)
+        info "Installation cancelled by user"
+        exit 0
+        ;;
+      *)
+        error "Invalid choice: $choice"
+        ;;
+    esac
+  done
 }
 
 # Install files
@@ -218,10 +222,10 @@ install_files() {
 
   # Install executables
   info "Installing executables..."
-  declare -a executables=("md2ansi" "md" "display-ansi-palette" "md-link-extract")
-  local exec_file
+  local -a executables=("md2ansi" "md" "display-ansi-palette" "md-link-extract")
+  local exec_file target
   for exec_file in "${executables[@]}"; do
-    local target="${bindir}/${exec_file}"
+    target="${bindir}/${exec_file}"
     install -m 0755 "${SCRIPT_DIR}/${exec_file}" "$target" || \
       die "Failed to install ${exec_file}"
     INSTALLED_FILES+=("$target")
@@ -257,11 +261,11 @@ show_post_install() {
   local install_type="$2"
 
   echo ""
-  echo -e "${COLOR_BOLD}${COLOR_GREEN}"
+  echo "${COLOR_BOLD}${COLOR_GREEN}"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo "  Installation Complete!"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo -e "${COLOR_RESET}"
+  echo "${COLOR_RESET}"
 
   success "md2ansi.bash v${SCRIPT_VERSION} installed successfully"
   echo ""
@@ -297,7 +301,8 @@ show_post_install() {
 main() {
   local install_type=""
   local prefix=""
-  local auto_confirm=0
+  local -i auto_confirm=0
+  local confirm
 
   # Parse command-line arguments
   while (( $# > 0 )); do
@@ -311,6 +316,7 @@ main() {
         shift
         ;;
       -p|--prefix)
+        (( $# >= 2 )) || die "--prefix requires an argument"
         install_type="custom"
         prefix="$2"
         shift 2
@@ -360,7 +366,6 @@ main() {
       if [[ ! -w "$prefix" ]] && (( EUID != 0 )); then
         warn "System-wide installation requires sudo/root privileges"
         if (( auto_confirm == 0 )); then
-          local confirm
           read -rp "Re-run with sudo? [y/N]: " confirm
           if [[ "${confirm,,}" != "y" ]]; then
             die "Installation cancelled - insufficient permissions"

@@ -3,8 +3,8 @@
 set -euo pipefail
 shopt -s inherit_errexit shift_verbose extglob nullglob
 
-SCRIPT_NAME=$(basename -- "$(readlink -en -- "$0")")
-readonly -- SCRIPT_NAME
+#shellcheck disable=SC2155
+declare -r SCRIPT_NAME=$(basename -- "$(realpath -- "$0")")
 
 # Function to remove UTM parameters from URLs
 remove_utm() {
@@ -24,10 +24,10 @@ main() {
     exit 0
   fi
 
-  Files=($@)
+  Files=("$@")
   for file in "${Files[@]}"; do
     if [[ ! -f "$file" ]]; then
-      >&2 echo "$SCRIPT_NAME: error: File '$file' not found."
+      >&2 echo "$SCRIPT_NAME: error: File ${file@Q} not found."
       exit 1
     fi
 
