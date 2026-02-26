@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # bash completion for md2ansi, md2ansi.bash, and md commands
-# Part of md2ansi.bash v1.0.0
+# Part of md2ansi.bash v1.0.1
 #
 # This file is sourced by bash, not executed. It should never use strict error
 # handling (set -e, set -u, set -o pipefail) as these can break the interactive

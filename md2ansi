@@ -33,7 +33,7 @@ declare -- CODE_LANG=''
 declare -A FOOTNOTES=()
 declare -a FOOTNOTE_REFS=()
 
-## Utility Functions (from lib/utils.sh) ##
+## Utility Functions ##
 
 declare -i VERBOSE=1 DEBUG=0
 
@@ -226,7 +226,7 @@ safe_regex_sub() {
 decp() { declare -p "$@" | sed 's/^declare -[a-zA-Z-]* //'; }
 
 # ================================================================================
-# ANSI Color Definitions (from lib/ansi-colors.sh)
+# ANSI Color Definitions
 # ================================================================================
 
 # Detect terminal color support
@@ -321,7 +321,7 @@ sanitize_ansi() {
 }
 
 # ================================================================================
-# Rendering Functions (from lib/renderer.sh)
+# Rendering Functions
 # ================================================================================
 
 # --------------------------------------------------------------------------------
@@ -700,7 +700,7 @@ highlight_bash() {
 }
 
 # ================================================================================
-# Table Rendering Functions (from lib/tables.sh)
+# Table Rendering Functions
 # ================================================================================
 
 # --------------------------------------------------------------------------------
@@ -999,7 +999,7 @@ _align_cell() {
 }
 
 # ================================================================================
-# Markdown Parser Functions (from lib/parser.sh)
+# Markdown Parser Functions
 # ================================================================================
 
 # --------------------------------------------------------------------------------
@@ -1415,9 +1415,6 @@ process_file() {
   # Process the markdown lines
   parse_markdown lines
 }
-
-# Parsing and rendering are separated into library modules to maintain clean architecture
-# and enable independent testing/modification of each concern
 
 # Main function
 

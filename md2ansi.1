@@ -1,4 +1,4 @@
-.TH MD2ANSI 1 "2025-11-03" "md2ansi 1.0.0" "User Commands"
+.TH MD2ANSI 1 "2026-02-26" "md2ansi 1.0.1" "User Commands"
 .SH NAME
 md2ansi \- convert Markdown to ANSI-colored terminal output
 .SH SYNOPSIS
@@ -69,6 +69,11 @@ instead of [IMG: alt] placeholders.
 .B \-\-no\-links
 Disable link formatting. Links will be rendered as plain text without
 underlining or special formatting.
+.SS "Other Options"
+.TP
+.B \-\-
+End of options. All subsequent arguments are treated as filenames, even if
+they begin with a dash.
 .SH MARKDOWN FEATURES
 .B md2ansi
 supports a comprehensive set of Markdown elements:
@@ -93,10 +98,10 @@ Inline formatting is supported within headers.
 .SS "Inline Formatting"
 .TP
 .B Bold
-Rendered using **text** or __text__
+Rendered using **text**
 .TP
 .I Italic
-Rendered using *text* or _text_
+Rendered using *text*
 .TP
 .BI "Bold Italic"
 Rendered using ***text***
@@ -285,9 +290,6 @@ includes several security features to handle untrusted input safely:
 .SS "File Size Limits"
 Maximum file size is limited to 10MB (configurable via MAX_FILE_SIZE in the
 script). This prevents memory exhaustion from extremely large files.
-.SS "Line Length Limits"
-Individual lines are limited to 100KB to prevent denial-of-service via
-extremely long lines.
 .SS "ReDoS Protection"
 Regular expression operations are wrapped with timeout command (1 second
 limit) to prevent Regular Expression Denial of Service attacks.
@@ -295,8 +297,8 @@ limit) to prevent Regular Expression Denial of Service attacks.
 All input is sanitized to remove ANSI escape sequences, preventing terminal
 injection attacks.
 .SS "Signal Handling"
-Proper signal handlers ensure cleanup on interruption (Ctrl-C) with graceful
-exit codes.
+Proper signal handlers ensure cleanup on interruption (SIGINT/Ctrl\-C) and
+termination (SIGTERM) with appropriate exit codes (130, 143).
 .SS "Permission Validation"
 File read permissions are validated before processing with clear error
 messages for inaccessible files.
@@ -354,10 +356,16 @@ Success - all files processed without errors
 General error - invalid arguments, file not found, or processing failure
 .TP
 .B 2
-Usage error - invalid options or arguments
+Missing argument \- required value not provided for an option
+.TP
+.B 22
+Invalid argument \- unrecognized option or invalid value (EINVAL)
 .TP
 .B 130
-Interrupted - user pressed Ctrl-C during processing
+Interrupted \- received SIGINT (Ctrl\-C)
+.TP
+.B 143
+Terminated \- received SIGTERM
 .SH SEE ALSO
 .BR less (1),
 .BR pandoc (1),
@@ -395,7 +403,7 @@ Based on concepts from the Python
 implementation, reimplemented in pure Bash following the Bash Coding Standard
 (BCS).
 .SH LICENSE
-Copyright \(co 2024 Open Technology Foundation
+Copyright \(co 2024\(en2026 Open Technology Foundation
 .PP
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software

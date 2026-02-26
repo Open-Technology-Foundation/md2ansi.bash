@@ -1,6 +1,6 @@
 # MD2ANSI (Bash Implementation)
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)
 ![License](https://img.shields.io/badge/license-GPL--3.0-green.svg)
 ![Shell](https://img.shields.io/badge/bash-5.2+-orange.svg)
 ![Status](https://img.shields.io/badge/status-stable-brightgreen.svg)
@@ -201,7 +201,7 @@ curl -s https://raw.githubusercontent.com/user/repo/main/README.md | md2ansi
 
 **Inline Formatting:**
 - ✓ Bold (`**text**`)
-- ✓ Italic (`*text*` or `_text_`)
+- ✓ Italic (`*text*`)
 - ✓ Combined bold+italic (`***text***`)
 - ✓ Strikethrough (`~~text~~`)
 - ✓ Inline code (`` `code` ``)
@@ -242,7 +242,6 @@ curl -s https://raw.githubusercontent.com/user/repo/main/README.md | md2ansi
 
 **Security:**
 - ✓ File size limits (10MB maximum)
-- ✓ Per-line length limits (100KB)
 - ✓ Input sanitization (ANSI escape removal)
 - ✓ ReDoS protection with timeout
 - ✓ Proper signal handling
@@ -533,7 +532,7 @@ diff <(md2ansi version1.md) <(md2ansi version2.md)
 | **Installation** | Copy one file | `pip install` | Bash: zero dependencies |
 | **Startup Time** | ~50ms | ~30ms | Bash slightly slower |
 | **Processing Speed** | 2-3x slower | Baseline | Python faster for large files |
-| **File Size** | 1,476 lines (45KB) | ~800 lines | Bash more verbose |
+| **File Size** | 1,460 lines (43KB) | ~800 lines | Bash more verbose |
 | **Dependencies** | None (coreutils only) | Python 3.7+ | Bash more portable |
 | **Design** | Monolithic single file | Single module | Both self-contained |
 | **Features** | 100% compatible | Full feature set | Identical CLI |
@@ -580,7 +579,7 @@ diff <(md2ansi version1.md) <(md2ansi version2.md)
 
 ### Design Philosophy
 
-md2ansi follows a **monolithic single-file design** for maximum portability and zero installation friction. All functionality is embedded in one executable file (`md2ansi`, 1,476 lines) with no external libraries or modules.
+md2ansi follows a **monolithic single-file design** for maximum portability and zero installation friction. All functionality is embedded in one executable file (`md2ansi`, 1,460 lines) with no external libraries or modules.
 
 **Design Benefits:**
 
@@ -597,30 +596,35 @@ md2ansi follows a **monolithic single-file design** for maximum portability and 
 
 ```
 md2ansi.bash/
-├── md2ansi               # Main executable (1,476 lines, 45KB)
+├── md2ansi               # Main executable (1,460 lines, 43KB)
 │                         # ◉ All functionality in single file
+├── md2ansi.bash          # Symlink → md2ansi
 ├── md                    # Pagination wrapper (15 lines)
 ├── display-ansi-palette  # Color palette viewer (72 lines)
 ├── md-link-extract       # Link extractor (54 lines)
-├── test/
-│   ├── run_tests         # Test suite runner (181 lines)
-│   ├── test_basic.sh     # Basic features (128 lines)
-│   ├── test_code.sh      # Code blocks (168 lines)
-│   ├── test_tables.sh    # Tables (96 lines)
-│   ├── test_footnotes.sh # Footnotes (105 lines)
-│   ├── test_wrapping.sh  # Text wrapping (182 lines)
-│   ├── test_edge_cases.sh # Edge cases (207 lines)
-│   ├── test_options.sh   # Feature toggles (96 lines)
-│   └── test_security.sh  # Security features (131 lines)
+├── md2ansi.1             # Man page
+├── md2ansi.bash_completion # Bash completion
+├── Makefile              # Build/install targets
+├── install.sh            # Interactive installer
+├── LICENSE               # GPL-3.0 license
 ├── README.md             # This file
-└── LICENSE               # GPL-3.0 license
+└── test/
+    ├── run_tests         # Test suite runner (181 lines)
+    ├── test_basic.sh     # Basic features (128 lines)
+    ├── test_code.sh      # Code blocks (168 lines)
+    ├── test_tables.sh    # Tables (96 lines)
+    ├── test_footnotes.sh # Footnotes (105 lines)
+    ├── test_wrapping.sh  # Text wrapping (182 lines)
+    ├── test_edge_cases.sh # Edge cases (207 lines)
+    ├── test_options.sh   # Feature toggles (96 lines)
+    └── test_security.sh  # Security features (131 lines)
 ```
 
 **Total Project Size:**
-- Main executable: 1,476 lines
+- Main executable: 1,460 lines
 - Utility scripts: 141 lines
 - Test suite: 1,294 lines
-- **Total: 2,911 lines**
+- **Total: 2,895 lines**
 
 ### Internal Code Organization
 
@@ -628,13 +632,13 @@ The `md2ansi` script is organized into clearly marked sections:
 
 | Section | Lines | Purpose |
 |:--------|:------|:--------|
-| **Script Header** | 1-36 | Shebang, strict mode, metadata, global variables, state tracking |
-| **Utility Functions** | 37-226 | Messaging, terminal detection, file validation, signal handling, string manipulation |
-| **ANSI Colors** | 227-322 | Color constants, ANSI escape sequences, color detection, strip/sanitize functions |
-| **Inline Rendering** | 323-710 | Bold, italic, strikethrough, links, inline code, text wrapping, header/list/blockquote rendering |
-| **Table Rendering** | 711-1015 | Table parsing, alignment detection, column width calculation, table output rendering |
-| **Block Parsing** | 1016-1250 | Main parser, code blocks, tables, headers, lists, footnotes, regular text processing |
-| **Main Functions** | 1251-1476 | Argument parsing, file processing, main entry point, program invocation |
+| **Script Header** | 1-35 | Shebang, strict mode, metadata, global variables, state tracking |
+| **Utility Functions** | 36-227 | Messaging, terminal detection, file validation, signal handling, string manipulation |
+| **ANSI Colors** | 228-322 | Color constants, ANSI escape sequences, color detection, strip/sanitize functions |
+| **Inline Rendering** | 323-701 | Bold, italic, strikethrough, links, inline code, text wrapping, header/list/blockquote rendering |
+| **Table Rendering** | 702-1000 | Table parsing, alignment detection, column width calculation, table output rendering |
+| **Block Parsing** | 1001-1237 | Main parser, code blocks, tables, headers, lists, footnotes, regular text processing |
+| **Main Functions** | 1238-1460 | Argument parsing, file processing, main entry point, program invocation |
 
 Each section is marked with clear header comments:
 ```bash
@@ -651,7 +655,6 @@ Each section is marked with clear header comments:
 # Configuration
 TERM_WIDTH=0              # Auto-detected terminal width
 MAX_FILE_SIZE=10485760    # 10MB file size limit
-MAX_LINE_LENGTH=100000    # 100KB per-line limit
 
 # Feature Flags
 OPTIONS[footnotes]=1
@@ -786,7 +789,7 @@ This implementation strictly adheres to the Bash Coding Standard:
 | **Messaging** | Standard functions: `error`, `warn`, `info`, `debug`, `die` |
 | **Cleanup** | Signal handling with `trap` |
 | **EOF Marker** | All scripts end with `#fin` followed by blank line |
-| **Increment** | Use `((var+=1))` not `((var++))` (post-increment breaks `set -e`) |
+| **Increment** | Standalone `var+=1` — never `((var++))` or `((var+=1))` |
 
 ### Adding New Features
 
@@ -794,7 +797,7 @@ Since md2ansi is monolithic, all edits are made to the single `md2ansi` file.
 
 **To add inline formatting:**
 
-Edit the `colorize_line()` function in the Inline Rendering section (lines 323-710):
+Edit the `colorize_line()` function in the Rendering Functions section:
 
 ```bash
 # Example: Add underline support for __text__
@@ -803,7 +806,7 @@ sed -E "s/__([^_]+)__/${ANSI_UNDERLINE}\1${ANSI_RESET}/g"
 
 **To add block-level elements:**
 
-Edit the `parse_markdown()` function in the Block Parsing section (lines 1016-1250):
+Edit the `parse_markdown()` function in the Markdown Parser Functions section:
 
 ```bash
 # Example: Add definition lists
@@ -884,7 +887,6 @@ Before submitting changes:
 | **Processing speed** | ~2-3x slower than Python | Acceptable for terminal use |
 | **Memory usage** | Very low | Efficient line-by-line processing |
 | **File size limit** | 10MB | Configurable via `MAX_FILE_SIZE` |
-| **Line length limit** | 100KB | Safety limit for ReDoS protection |
 | **Terminal width** | 20-500 columns | Bounds checking |
 
 ### Comparison to Python Version
@@ -905,7 +907,6 @@ For reference, processing a 1MB markdown file:
 | Feature | Implementation | Limit/Behavior |
 |:--------|:---------------|:---------------|
 | **File Size Limits** | Pre-processing validation with `wc -c` | 10MB maximum (configurable) |
-| **Line Length Limits** | Per-line checking during processing | 100KB per line |
 | **Input Sanitization** | ANSI escape sequence removal | All input cleaned via `strip_ansi()` |
 | **ReDoS Protection** | `timeout` command wrapper for regex | 1 second timeout on complex patterns |
 | **Injection Prevention** | Proper variable quoting throughout | All expansions quoted |
@@ -1114,10 +1115,10 @@ See [LICENSE](LICENSE) file for full text.
 
 | Metric | Value |
 |:-------|:------|
-| **md2ansi Lines** | 1,476 lines (45KB) |
+| **md2ansi Lines** | 1,460 lines (43KB) |
 | **Total Scripts** | 4 main + 1 test runner + 8 test files |
 | **Test Coverage** | 1,294 lines across 8 test files |
-| **Total Project** | 2,911 lines |
+| **Total Project** | 2,895 lines |
 | **Features** | 15+ markdown elements |
 | **Dependencies** | 0 (zero) |
 | **Installation** | Single file copy |
@@ -1138,6 +1139,6 @@ See [LICENSE](LICENSE) file for full text.
 
 **Status**: ✓ Core implementation complete and functional
 
-**Version**: 1.0.0
+**Version**: 1.0.1
 
 #fin
