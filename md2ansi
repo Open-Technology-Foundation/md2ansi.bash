@@ -206,6 +206,7 @@ safe_regex_sub() {
 
   # For simple patterns (short, no quantifiers), execute directly
   if ((${#pattern} < 50 )) && [[ ! $pattern =~ [\*\+\{\?] ]]; then
+    #shellcheck disable=SC2001
     sed "s/$pattern/$replacement/g" <<<"$text" 2>/dev/null || echo "$text"
     return $?
   fi
@@ -291,6 +292,7 @@ else
 
   declare -r COLOR_TEXT='' COLOR_BLOCKQUOTE='' COLOR_CODEBLOCK='' COLOR_LIST='' COLOR_HR='' COLOR_TABLE='' COLOR_LINK=''
 
+  #shellcheck disable=SC2034
   declare -r COLOR_KEYWORD='' COLOR_STRING='' COLOR_NUMBER='' COLOR_COMMENT='' COLOR_FUNCTION='' COLOR_CLASS='' COLOR_BUILTIN=''
 fi
 
@@ -302,6 +304,7 @@ fi
 strip_ansi() {
   local -- text=$1
   # Remove ANSI escape sequences: ESC [ ... letter
+  #shellcheck disable=SC2001
   sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' <<<"$text"
 }
 
@@ -716,6 +719,7 @@ render_table() {
   local -n _md_lines=$1
   local -n _md_idx=$2
 
+  #shellcheck disable=SC2034
   local -a table_lines=() all_rows=() data_rows=() alignments=() col_widths=()
   local -i has_alignment=0 col_count=0
   local -- line
@@ -894,7 +898,9 @@ _calculate_column_widths() {
 # Usage: _render_table_output data_rows alignments col_widths col_count has_alignment
 _render_table_output() {
   local -n _data_rows=$1
+  #shellcheck disable=SC2178
   local -n _alignments=$2
+  #shellcheck disable=SC2178
   local -n _col_widths=$3
   local -i _col_count=$4
   local -i _has_alignment=$5
@@ -939,8 +945,9 @@ _render_table_output() {
       # Apply inline formatting
       cell_text=$(colorize_line "$cell_text")
 
-      # Strip COLOR_TEXT codes that interfere with table rendering
-      cell_text="${cell_text//$COLOR_TEXT/}"
+      # Replace COLOR_TEXT with COLOR_TABLE so text after inline formatting
+      # resets to table color instead of terminal default
+      cell_text="${cell_text//$COLOR_TEXT/$COLOR_TABLE}"
 
       # Align cell
       width=${_col_widths[i]}
