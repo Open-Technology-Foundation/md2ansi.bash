@@ -49,8 +49,9 @@ success() {
 }
 
 die() {
+  local -i code=$1; shift
   error "$@"
-  exit 1
+  exit "$code"
 }
 
 # Cleanup on failure
@@ -131,7 +132,7 @@ check_prerequisites() {
   local file
   for file in "${required_files[@]}"; do
     if [[ ! -f "${SCRIPT_DIR}/${file}" ]]; then
-      die "Required file not found: ${file}"
+      die 3 "Required file not found: ${file}"
     fi
   done
 
@@ -220,9 +221,9 @@ install_files() {
 
   # Create directories
   info "Creating directories..."
-  mkdir -p "$bindir" || die "Failed to create $bindir"
-  mkdir -p "$mandir" || die "Failed to create $mandir"
-  mkdir -p "$completiondir" || die "Failed to create $completiondir"
+  mkdir -p "$bindir" || die 5 "Failed to create $bindir"
+  mkdir -p "$mandir" || die 5 "Failed to create $mandir"
+  mkdir -p "$completiondir" || die 5 "Failed to create $completiondir"
 
   # Install executables
   info "Installing executables..."
@@ -231,7 +232,7 @@ install_files() {
   for exec_file in "${executables[@]}"; do
     target="${bindir}/${exec_file}"
     install -m 0755 "${SCRIPT_DIR}/${exec_file}" "$target" || \
-      die "Failed to install ${exec_file}"
+      die 5 "Failed to install ${exec_file}"
     INSTALLED_FILES+=("$target")
     success "Installed: ${exec_file}"
   done
@@ -240,7 +241,7 @@ install_files() {
   info "Installing manpage..."
   local manpage_target="${mandir}/md2ansi.1"
   install -m 0644 "${SCRIPT_DIR}/md2ansi.1" "$manpage_target" || \
-    die "Failed to install manpage"
+    die 5 "Failed to install manpage"
   INSTALLED_FILES+=("$manpage_target")
   success "Installed: md2ansi.1"
 
@@ -248,18 +249,18 @@ install_files() {
   info "Installing bash completion..."
   local completion_target="${completiondir}/md2ansi"
   install -m 0644 "${SCRIPT_DIR}/md2ansi.bash_completion" "$completion_target" || \
-    die "Failed to install bash completion"
+    die 5 "Failed to install bash completion"
   INSTALLED_FILES+=("$completion_target")
   success "Installed: bash completion"
 
   # Install mdview data files
   local datadir="${prefix}/share/mdview"
   info "Installing mdview data files..."
-  mkdir -p "${datadir}/themes" || die "Failed to create ${datadir}/themes"
+  mkdir -p "${datadir}/themes" || die 5 "Failed to create ${datadir}/themes"
 
   local data_target="${datadir}/mdview.conf"
   install -m 0644 "${SCRIPT_DIR}/mdview.conf" "$data_target" || \
-    die "Failed to install mdview.conf"
+    die 5 "Failed to install mdview.conf"
   INSTALLED_FILES+=("$data_target")
   success "Installed: mdview.conf"
 
@@ -268,7 +269,7 @@ install_files() {
     [[ -f "$theme_file" ]] || continue
     data_target="${datadir}/themes/${theme_file##*/}"
     install -m 0644 "$theme_file" "$data_target" || \
-      die "Failed to install ${theme_file##*/}"
+      die 5 "Failed to install ${theme_file##*/}"
     INSTALLED_FILES+=("$data_target")
     success "Installed: themes/${theme_file##*/}"
   done
@@ -341,7 +342,7 @@ main() {
         shift
         ;;
       -p|--prefix)
-        (( $# >= 2 )) || die "--prefix requires an argument"
+        (( $# >= 2 )) || die 8 "--prefix requires an argument"
         install_type="custom"
         prefix="$2"
         shift 2
@@ -361,7 +362,7 @@ main() {
       *)
         error "Unknown option: $1"
         show_usage
-        exit 2
+        exit 22
         ;;
     esac
   done
@@ -393,7 +394,7 @@ main() {
         if (( auto_confirm == 0 )); then
           read -rp "Re-run with sudo? [y/N]: " confirm
           if [[ "${confirm,,}" != "y" ]]; then
-            die "Installation cancelled - insufficient permissions"
+            die 13 "Installation cancelled - insufficient permissions"
           fi
         fi
         info "Re-executing with sudo..."

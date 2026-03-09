@@ -401,15 +401,34 @@ $XDG_DATA_HOME/mdview/themes/ for user-installed themes.
 Base directory for runtime files (default: /tmp). mdview creates temporary HTML
 files in $XDG_RUNTIME_DIR/mdview/.
 .SH EXIT STATUS
+Exit codes follow BCS0602 (Bash Coding Standard):
 .TP
 .B 0
-Success - all files processed without errors
+Success \- all files processed without errors (also \-\-help, \-\-version)
 .TP
 .B 1
-General error - invalid arguments, file not found, or processing failure
+General error \- file too large, stdin size exceeded
 .TP
 .B 2
-Missing argument \- required value not provided for an option
+Usage error \- no file specified, wrong argument count
+.TP
+.B 3
+File not found \- specified file does not exist, or path is a directory
+.TP
+.B 5
+I/O error \- cannot create temporary directory (mdview)
+.TP
+.B 8
+Required argument missing \- option flag without its required value
+.TP
+.B 13
+Permission denied \- cannot read file
+.TP
+.B 18
+Missing dependency \- pandoc not found (mdview)
+.TP
+.B 19
+Configuration error \- theme not found (mdview)
 .TP
 .B 22
 Invalid argument \- unrecognized option or invalid value (EINVAL)

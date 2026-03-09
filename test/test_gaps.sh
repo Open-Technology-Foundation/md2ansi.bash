@@ -62,8 +62,8 @@ else
   assert_fail "Combined -tD should produce debug output"
 fi
 
-# -w80 splits as -w + -80 (stacking prefixes dash), so -80 fails width validation
-assert_exit_code 22 "echo test | ./md2ansi -w80 2>&1" "Attached value -w80 returns exit 22 (invalid width)"
+# -w80 splits as -w + -80 (stacking prefixes dash), noarg catches leading dash
+assert_exit_code 8 "echo test | ./md2ansi -w80 2>&1" "Attached value -w80 returns exit 8 (missing argument)"
 
 # Invalid combined option returns error (e.g., -Dz)
 assert_exit_code 22 "echo test | ./md2ansi -Dz 2>&1" "Invalid combined option -Dz returns error"
@@ -122,7 +122,7 @@ set +e
 ./md2ansi /tmp/md2ansi_multi1.md /nonexistent_file.md >/dev/null 2>&1
 multi_exit=$?
 set -e
-assert_equals "1" "$multi_exit" "Multi-file - nonexistent second file returns error"
+assert_equals "3" "$multi_exit" "Multi-file - nonexistent second file returns exit 3 (not found)"
 
 # State doesn't leak between files (code block in file1 doesn't affect file2)
 printf '```\nunclosed code\n' > /tmp/md2ansi_leak1.md

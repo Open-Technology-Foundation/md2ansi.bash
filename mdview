@@ -64,7 +64,7 @@ mdview() {
 
     if [[ -z $theme_dir ]]; then
       _error "Theme '$theme_name' not found (need $theme_name.css + $theme_name.theme)"
-      return 1
+      return 19
     fi
 
     _MDVIEW_CSS="$theme_dir/$theme_name.css"
@@ -77,18 +77,18 @@ mdview() {
   fi
 
   local -- file=${1:-}
-  [[ -f "$file" ]] || { _error "File ${file@Q} not found"; return 1; }
+  [[ -f "$file" ]] || { _error "File ${file@Q} not found"; return 3; }
   file=$(realpath -e -- "$file")
 
   _load_config || return $?
 
   local -- TMPDIR=${XDG_RUNTIME_DIR:-"${TMPDIR:-/tmp}"}/mdview
-  mkdir -p "$TMPDIR" || { _error "Cannot create $TMPDIR"; return 1; }
+  mkdir -p "$TMPDIR" || { _error "Cannot create $TMPDIR"; return 5; }
   local -- tmpfile
   tmpfile=$(mktemp -p "$TMPDIR" "$(basename -- "$file" .md)".XXXXX.html)
 
   local -- pandoc
-  pandoc=$(command -v pandoc) || { _error 'pandoc not found'; return 1; }
+  pandoc=$(command -v pandoc) || { _error 'pandoc not found'; return 18; }
 
   "$pandoc" "$file" -s --from=gfm --to=html --ascii \
     --css="$_MDVIEW_CSS" \
@@ -162,7 +162,7 @@ HELP
 }
 
 noarg() {
-  (($# >= 2)) || die 2 "Option $1 requires an argument"
+  (($# >= 2)) || die 8 "Option $1 requires an argument"
 }
 
 # Parse arguments

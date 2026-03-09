@@ -35,17 +35,17 @@ assert_contains "$output_h" "Usage:" "-h is equivalent to --help"
 # No arguments → exit 2
 assert_exit_code 2 "./mdview 2>&1" "No arguments exits 2"
 
-# Missing file → exit 1
-assert_exit_code 1 "./mdview /nonexistent/file.md 2>&1" "Nonexistent file exits 1"
+# Missing file → exit 3 (BCS: file not found)
+assert_exit_code 3 "./mdview /nonexistent/file.md 2>&1" "Nonexistent file exits 3 (not found)"
 
 # Invalid option → exit 22
 assert_exit_code 22 "./mdview --bogus 2>&1" "Invalid option exits 22"
 assert_exit_code 22 "./mdview -z 2>&1" "Invalid short option exits 22"
 
-# Options requiring argument, missing → exit 2
-assert_exit_code 2 "./mdview --theme 2>&1" "--theme without value exits 2"
-assert_exit_code 2 "./mdview --window-size 2>&1" "--window-size without value exits 2"
-assert_exit_code 2 "./mdview --browser 2>&1" "--browser without value exits 2"
+# Options requiring argument, missing → exit 8 (BCS: required argument missing)
+assert_exit_code 8 "./mdview --theme 2>&1" "--theme without value exits 8 (missing arg)"
+assert_exit_code 8 "./mdview --window-size 2>&1" "--window-size without value exits 8 (missing arg)"
+assert_exit_code 8 "./mdview --browser 2>&1" "--browser without value exits 8 (missing arg)"
 
 # Invalid window size format → exit 22
 assert_exit_code 22 "./mdview --window-size bad README.md 2>&1" "Invalid window-size format exits 22"
@@ -61,8 +61,8 @@ assert_contains "$stderr" "mdview" "Error message includes program name"
 # ================================================================================
 
 # -tnonexistent parses as -t nonexistent (theme), then /nonexistent is the file
-# File not found → exit 1 (proves stacking parsed -t correctly, not as invalid option)
-assert_exit_code 1 "./mdview -tnonexistent /nonexistent 2>&1" "Stacked -t flag parsed correctly (file error, not option error)"
+# File not found → exit 3 (proves stacking parsed -t correctly, not as invalid option)
+assert_exit_code 3 "./mdview -tnonexistent /nonexistent 2>&1" "Stacked -t flag parsed correctly (file error, not option error)"
 
 # ================================================================================
 # Sourced mode tests
@@ -84,7 +84,7 @@ output=$(bash -c 'source ./mdview 2>/dev/null; mdview a b 2>&1; echo "exit:$?"' 
 assert_contains "$output" "exit:2" "Sourced mdview with too many args returns 2"
 
 output=$(bash -c 'source ./mdview 2>/dev/null; mdview /nonexistent 2>&1; echo "exit:$?"' 2>&1)
-assert_contains "$output" "exit:1" "Sourced mdview with missing file returns 1"
+assert_contains "$output" "exit:3" "Sourced mdview with missing file returns 3 (not found)"
 
 # set -euo pipefail NOT active in sourced mode (line 120 only runs in script mode)
 output=$(bash -c '
@@ -131,10 +131,10 @@ if command -v pandoc &>/dev/null && [[ -d themes ]]; then
     "MDVIEW_BROWSER=/bin/true ./mdview --theme github-dark README.md" \
     "CLI --theme override works"
 
-  # Invalid theme produces error (not crash)
-  assert_exit_code 1 \
+  # Invalid theme produces config error (not crash)
+  assert_exit_code 19 \
     "MDVIEW_BROWSER=/bin/true ./mdview --theme nonexistent-theme README.md" \
-    "Invalid theme exits 1 with error"
+    "Invalid theme exits 19 (configuration error)"
 
   # Error message for invalid theme is descriptive
   stderr=$(MDVIEW_BROWSER=/bin/true ./mdview --theme nonexistent-theme README.md 2>&1 ||:)

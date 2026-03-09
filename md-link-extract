@@ -28,7 +28,7 @@ main() {
   for file in "${Files[@]}"; do
     if [[ ! -f "$file" ]]; then
       >&2 echo "$SCRIPT_NAME: error: File ${file@Q} not found."
-      exit 1
+      exit 3
     fi
 
     # Extract all types of links and process them

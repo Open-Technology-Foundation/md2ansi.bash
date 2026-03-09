@@ -20,7 +20,7 @@ assert_contains "$output" "Test" "Width 500 (maximum) works"
 assert_exit_code 22 "./md2ansi --width abc </dev/null 2>&1" "Width 'abc' returns error"
 assert_exit_code 22 "./md2ansi --width 10 </dev/null 2>&1" "Width 10 (below minimum) returns error"
 assert_exit_code 22 "./md2ansi --width 600 </dev/null 2>&1" "Width 600 (above maximum) returns error"
-assert_exit_code 22 "./md2ansi --width -5 </dev/null 2>&1" "Negative width returns exit 22 (invalid value)"
+assert_exit_code 8 "./md2ansi --width -5 </dev/null 2>&1" "Negative width returns exit 8 (noarg catches leading dash)"
 
 # --------------------------------------------------------------------------------
 # --plain option (disables all formatting)

@@ -123,6 +123,6 @@ assert_contains "$output" "strike" "Strikethrough inside bold"
 # --------------------------------------------------------------------------------
 # Error handling
 
-assert_exit_code 1 "./md2ansi /nonexistent/file.md 2>&1" "Non-existent file returns error"
+assert_exit_code 3 "./md2ansi /nonexistent/file.md 2>&1" "Non-existent file returns exit 3 (not found)"
 
 #fin
