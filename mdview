@@ -1,0 +1,218 @@
+#!/bin/bash
+# mdview — Markdown viewer using pandoc with configurable theme + syntax highlighting
+
+mdview() {
+  # BCS0703: prefixed _error() to avoid polluting caller namespace when sourced
+  _error() { >&2 echo "mdview: ✗ $*"; }
+  # BCS0201: function-scoped vars shared with nested _load_config()
+  declare -- _MDVIEW_CSS _MDVIEW_THEME
+
+  _load_config() {
+    # Save any pre-set values from CLI/env (${var+1} = set, even if empty)
+    local -i _have_theme=${MDVIEW_THEME+1}
+    local -i _have_size=${MDVIEW_WINDOW_SIZE+1}
+    local -i _have_browser=${MDVIEW_BROWSER+1}
+    local -- _save_theme=${MDVIEW_THEME:-}
+    local -- _save_size=${MDVIEW_WINDOW_SIZE:-}
+    local -- _save_browser=${MDVIEW_BROWSER:-}
+
+    # Defaults
+    MDVIEW_THEME=github-dark
+    MDVIEW_WINDOW_SIZE=960x1080
+    MDVIEW_BROWSER=
+
+    # Detect system prefix from script install location
+    local -- script_path prefix script_dir
+    script_path=$(realpath -- "${BASH_SOURCE[0]}" 2>/dev/null) ||:
+    if [[ -n $script_path ]]; then
+      script_dir=${script_path%/*}
+      prefix=${script_path%/bin/*}
+      # If strip didn't match /bin/, we're in dev mode — clear prefix
+      [[ "$prefix" == "$script_path" ]] && prefix=
+    fi
+    : "${prefix:=/usr/local}"
+    local -- sys_datadir="$prefix/share/mdview"
+    # Dev mode: check script's own directory for themes/mdview.conf
+    if [[ -n ${script_dir:-} && -d "$script_dir/themes" ]]; then
+      sys_datadir="$script_dir"
+    fi
+    local -- user_configdir="${XDG_CONFIG_HOME:-$HOME/.config}/mdview"
+    local -- user_datadir="${XDG_DATA_HOME:-$HOME/.local/share}/mdview"
+
+    # Source config: system first, then user overrides
+    # shellcheck disable=SC1091
+    [[ -f "$sys_datadir/mdview.conf" ]] && source "$sys_datadir/mdview.conf"
+    # shellcheck disable=SC1091
+    [[ -f "$user_configdir/mdview.conf" ]] && source "$user_configdir/mdview.conf"
+
+    # CLI/env overrides win over config files (||: prevents set -e abort when flag=0)
+    # shellcheck disable=SC2015
+    ((_have_theme))   && MDVIEW_THEME=$_save_theme   ||:
+    # shellcheck disable=SC2015
+    ((_have_size))    && MDVIEW_WINDOW_SIZE=$_save_size ||:
+    # shellcheck disable=SC2015
+    ((_have_browser)) && MDVIEW_BROWSER=$_save_browser ||:
+
+    # Resolve theme files: user dir first, then system dir
+    local -- theme_name="$MDVIEW_THEME"
+    local -- theme_dir=
+    if [[ -f "$user_datadir/themes/$theme_name.css" && -f "$user_datadir/themes/$theme_name.theme" ]]; then
+      theme_dir="$user_datadir/themes"
+    elif [[ -f "$sys_datadir/themes/$theme_name.css" && -f "$sys_datadir/themes/$theme_name.theme" ]]; then
+      theme_dir="$sys_datadir/themes"
+    fi
+
+    if [[ -z $theme_dir ]]; then
+      _error "Theme '$theme_name' not found (need $theme_name.css + $theme_name.theme)"
+      return 1
+    fi
+
+    _MDVIEW_CSS="$theme_dir/$theme_name.css"
+    _MDVIEW_THEME="$theme_dir/$theme_name.theme"
+  }
+
+  if (($# == 0 || $# > 1)); then
+    _error 'Invalid number of arguments'
+    return 2
+  fi
+
+  local -- file=${1:-}
+  [[ -f "$file" ]] || { _error "File ${file@Q} not found"; return 1; }
+  file=$(realpath -e -- "$file")
+
+  _load_config || return $?
+
+  local -- TMPDIR=${XDG_RUNTIME_DIR:-"${TMPDIR:-/tmp}"}/mdview
+  mkdir -p "$TMPDIR" || { _error "Cannot create $TMPDIR"; return 1; }
+  local -- tmpfile
+  tmpfile=$(mktemp -p "$TMPDIR" "$(basename -- "$file" .md)".XXXXX.html)
+
+  local -- pandoc
+  pandoc=$(command -v pandoc) || { _error 'pandoc not found'; return 1; }
+
+  "$pandoc" "$file" -s --from=gfm --to=html --ascii \
+    --css="$_MDVIEW_CSS" \
+    --highlight-style="$_MDVIEW_THEME" \
+    --metadata title="${file##*/}" \
+    -o "$tmpfile" || {
+      local -i err=$?
+      _error "pandoc error $err"
+      return "$err"
+    }
+
+  local -- browser
+  if [[ -n "$MDVIEW_BROWSER" ]]; then
+    browser="$MDVIEW_BROWSER"
+  else
+    browser=$(command -v google-chrome || command -v chromium-browser || command -v chromium ||:)
+  fi
+  if [[ -n "$browser" ]]; then
+    "$browser" --app="file://$tmpfile" --window-size="${MDVIEW_WINDOW_SIZE/x/,}" &>/dev/null & disown
+  else
+    xdg-open "$tmpfile" &>/dev/null & disown
+  fi
+
+  # Delayed cleanup: give browser time to load the local file
+  (sleep 30 && rm -f "$tmpfile") &>/dev/null & disown
+}
+declare -fx mdview
+
+[[ ${BASH_SOURCE[0]} == "$0" ]] || return 0
+set -euo pipefail
+shopt -s inherit_errexit shift_verbose extglob nullglob
+
+declare -r SCRIPT_NAME=${0##*/}
+declare -r VERSION=1.0.1
+declare -rx PATH=/usr/local/bin:/usr/bin:/bin
+
+die() {
+  local -i code=$1; shift
+  >&2 echo "${SCRIPT_NAME}: ✗ $*"
+  exit "$code"
+}
+
+usage() {
+  cat <<HELP
+${SCRIPT_NAME} — Markdown viewer using pandoc with theme support
+
+Usage: ${SCRIPT_NAME} [OPTIONS] <file>
+
+Options:
+  -t, --theme NAME         Theme name (default: github-dark)
+  -s, --window-size WxH    Browser window size (default: 960x1080)
+  -b, --browser PATH       Browser executable (default: auto-detect)
+  -V, --version            Show version and exit
+  -h, --help               Show this help and exit
+
+Configuration:
+  System config:  <prefix>/share/mdview/mdview.conf
+  User config:    \${XDG_CONFIG_HOME:-~/.config}/mdview/mdview.conf
+
+  System themes:  <prefix>/share/mdview/themes/
+  User themes:    \${XDG_DATA_HOME:-~/.local/share}/mdview/themes/
+
+  Each theme requires two files: <name>.css and <name>.theme
+  Precedence: CLI flags > user config > system config > defaults
+
+Examples:
+  ${SCRIPT_NAME} README.md
+  ${SCRIPT_NAME} --theme github-dark README.md
+  ${SCRIPT_NAME} --window-size 1200x900 doc.md
+HELP
+}
+
+noarg() {
+  (($# >= 2)) || die 2 "Option $1 requires an argument"
+}
+
+# Parse arguments
+declare -- file=
+while (($#)); do
+  case $1 in
+    -t|--theme)
+      noarg "$@"
+      shift
+      export MDVIEW_THEME="$1"
+      ;;
+    -s|--window-size)
+      noarg "$@"
+      shift
+      [[ $1 =~ ^[0-9]+x[0-9]+$ ]] || die 22 "Invalid window size ${1@Q} (expected WIDTHxHEIGHT)"
+      export MDVIEW_WINDOW_SIZE="$1"
+      ;;
+    -b|--browser)
+      noarg "$@"
+      shift
+      export MDVIEW_BROWSER="$1"
+      ;;
+    -V|--version)
+      echo "$SCRIPT_NAME $VERSION"
+      exit 0
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      (($#)) && file="$1"
+      break
+      ;;
+    -[tsbVh]?*)
+      set -- "${1:0:2}" "-${1:2}" "${@:2}"
+      continue
+      ;;
+    -*)
+      die 22 "Invalid option ${1@Q}"
+      ;;
+    *)
+      file="$1"
+      ;;
+  esac
+  shift
+done
+
+[[ -n "$file" ]] || die 2 "No file specified. See '${SCRIPT_NAME} --help'."
+
+mdview "$file"
+#fin

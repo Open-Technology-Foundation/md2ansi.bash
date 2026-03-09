@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# bash completion for md2ansi, md2ansi.bash, and md commands
+# bash completion for md2ansi, md2ansi.bash, md, and mdview commands
 # Part of md2ansi.bash v1.0.1
 #
 # This file is sourced by bash, not executed. It should never use strict error
@@ -100,6 +100,87 @@ _md2ansi_completion() {
 }
 
 # ================================================================================
+# mdview Completion Function
+# ================================================================================
+
+# Completion function for mdview — browser-based markdown preview
+# Handles: option completion, theme names, window sizes, browser paths, file completion
+_mdview_completion() {
+  local cur prev words cword
+  _init_completion || return
+
+  # Handle options that take arguments
+  case "$prev" in
+    -t|--theme)
+      # Discover available theme names from known directories
+      local -a themes=()
+      local script_path script_dir prefix sys_datadir
+      script_path=$(command -v mdview 2>/dev/null)
+      if [[ -n "$script_path" ]]; then
+        script_path=$(realpath -- "$script_path" 2>/dev/null) || script_path=
+      fi
+      if [[ -n "$script_path" ]]; then
+        script_dir=${script_path%/*}
+        prefix=${script_path%/bin/*}
+        [[ "$prefix" == "$script_path" ]] && prefix=
+      fi
+      : "${prefix:=/usr/local}"
+      sys_datadir="$prefix/share/mdview"
+      # Dev mode: themes next to script
+      [[ -n "${script_dir:-}" && -d "$script_dir/themes" ]] && sys_datadir="$script_dir"
+      local user_datadir="${XDG_DATA_HOME:-$HOME/.local/share}/mdview"
+      # Collect theme names (basename without extension, deduplicated)
+      local theme_file
+      for theme_file in "$sys_datadir"/themes/*.css "$user_datadir"/themes/*.css; do
+        [[ -f "$theme_file" ]] || continue
+        local name=${theme_file##*/}
+        name=${name%.css}
+        themes+=("$name")
+      done
+      COMPREPLY=($(compgen -W "${themes[*]}" -- "$cur"))
+      return 0
+      ;;
+    -s|--window-size)
+      # Suggest common browser window sizes (WIDTHxHEIGHT)
+      local -a sizes=(800x600 960x1080 1024x768 1200x900 1280x1024 1920x1080)
+      COMPREPLY=($(compgen -W "${sizes[*]}" -- "$cur"))
+      return 0
+      ;;
+    -b|--browser)
+      # Complete executable paths
+      COMPREPLY=($(compgen -c -- "$cur"))
+      return 0
+      ;;
+  esac
+
+  # Complete option flags when current word starts with dash
+  if [[ $cur == -* ]]; then
+    local -a opts=(
+      '-t' '-s' '-b' '-h' '-V'
+      '--theme' '--window-size' '--browser' '--help' '--version'
+    )
+    COMPREPLY=($(compgen -W "${opts[*]}" -- "$cur"))
+    return 0
+  fi
+
+  # Default: complete markdown files
+  if declare -F _filedir &>/dev/null && [[ $(type -t _filedir) == "function" ]]; then
+    _filedir '@(md|markdown|MD|MARKDOWN|txt|rst)'
+  else
+    local -a md_files
+    md_files=($(compgen -f -X '!*.md' -- "$cur"))
+    md_files+=($(compgen -f -X '!*.markdown' -- "$cur"))
+    md_files+=($(compgen -d -- "$cur"))
+    if (( ${#md_files[@]} == 0 )); then
+      md_files=($(compgen -f -- "$cur"))
+    fi
+    COMPREPLY=("${md_files[@]}")
+  fi
+
+  return 0
+}
+
+# ================================================================================
 # Register Completion
 # ================================================================================
 
@@ -107,5 +188,8 @@ _md2ansi_completion() {
 complete -F _md2ansi_completion md2ansi
 complete -F _md2ansi_completion md2ansi.bash
 complete -F _md2ansi_completion md
+
+# Register the completion function for mdview
+complete -F _mdview_completion mdview
 
 #fin

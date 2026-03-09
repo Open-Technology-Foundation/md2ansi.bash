@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-#shellcheck disable=SC2015
 # md2ansi: Convert Markdown to ANSI-colored text in the terminal
 # Bash implementation of md2ansi with zero external dependencies
 set -euo pipefail
 shopt -s inherit_errexit shift_verbose extglob nullglob
+
+export PATH=/usr/local/bin:/usr/bin:/bin
+export PS4='+ ${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]:+${FUNCNAME[0]}():} '
 
 # Script metadata
 declare -r VERSION=1.0.1
@@ -35,13 +37,13 @@ declare -a FOOTNOTE_REFS=()
 
 ## Utility Functions ##
 
-declare -i VERBOSE=1 DEBUG=0
+declare -i DEBUG=0
 
 # Message colors (independent of ANSI color library)
 if [[ -t 1 && -t 2 ]]; then
-  declare -r NC=$'\033[0m' RED=$'\033[0;31m' GREEN=$'\033[0;32m' YELLOW=$'\033[0;33m' CYAN=$'\033[0;36m'
+  declare -r NC=$'\033[0m' RED=$'\033[0;31m' YELLOW=$'\033[0;33m'
 else
-  declare -r NC='' RED='' GREEN='' YELLOW='' CYAN=''
+  declare -r NC='' RED='' YELLOW=''
 fi
 
 # --------------------------------------------------------------------------------
@@ -49,13 +51,10 @@ fi
 
 # Internal message function using FUNCNAME for context
 _msg() {
-  local -- prefix="${SCRIPT_NAME}:" msg
-  case "${FUNCNAME[1]}" in
-    success) prefix+=" ${GREEN}✓${NC}" ;;
+  local -- prefix="$SCRIPT_NAME:" msg
+  case ${FUNCNAME[1]} in
     warn)    prefix+=" ${YELLOW}▲${NC}" ;;
-    info)    prefix+=" ${CYAN}◉${NC}" ;;
     error)   prefix+=" ${RED}✗${NC}" ;;
-    debug)   prefix+=" ${YELLOW}DEBUG${NC}:" ;;
     *) ;;
   esac
   for msg in "$@"; do
@@ -63,25 +62,23 @@ _msg() {
   done
 }
 
-# Conditional output based on verbosity
-vecho()   { ((VERBOSE)) || return 0; _msg "$@"; }
-success() { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
-warn()    { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
-info()    { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
-
-# Debug output with timestamp
-debug() {
-  ((DEBUG)) || return 0
-  local -- timestamp
-  timestamp=$(date +%H:%M:%S.%3N 2>/dev/null || date +%H:%M:%S)
-  >&2 printf '[%s] [DEBUG] %s\n' "$timestamp" "$*"
-}
-
 # Unconditional output
+warn()  { >&2 _msg "$@"; }
 error() { >&2 _msg "$@"; }
 
 # Exit with error
 die() { (($# < 2)) || error "${@:2}"; exit "${1:-0}"; }
+
+# Debug output with timestamp
+debug() {
+  ((DEBUG)) || return 0
+  local -- timestamp msg
+  timestamp=$(date +%H:%M:%S.%3N 2>/dev/null || date +%H:%M:%S)
+  for msg in "$@"; do
+    >&2 printf '[%s] %s⦿%s %s\n' "$timestamp" "$YELLOW" "$NC" "$msg"
+  done
+}
+
 
 # --------------------------------------------------------------------------------
 # Terminal detection functions
@@ -93,9 +90,9 @@ get_terminal_width() {
 
   # Method 1: tput cols
   width=$(tput cols 2>/dev/null || echo 0)
-  if ((width > 0)); then
-    ((width < 20)) && width=20 ||:
-    ((width > 500)) && width=500 ||:
+  if ((width)); then
+    ((width >= 20)) || width=20
+    ((width <= 500)) || width=500
     debug "Terminal width from tput: $width"
     echo "$width"
     return 0
@@ -103,10 +100,10 @@ get_terminal_width() {
 
   # Method 2: stty size
   if [[ -t 1 ]]; then
-    read -r _ width < <(stty size 2>/dev/null || echo "0 0")
-    if ((width > 0)); then
-      ((width < 20)) && width=20 ||:
-      ((width > 500)) && width=500 ||:
+    read -r _ width < <(stty size 2>/dev/null || echo '0 0')
+    if ((width)); then
+      ((width >= 20)) || width=20
+      ((width <= 500)) || width=500
       debug "Terminal width from stty: $width"
       echo "$width"
       return 0
@@ -138,7 +135,7 @@ validate_file_size() {
   [[ ! -d "$filepath" ]] || die 1 "${filepath@Q} is a directory, not a file"
 
   # Get file size in bytes
-  file_size=$(wc -c <"$filepath" 2>/dev/null || echo 0)
+  file_size=$(stat -c '%s' "$filepath" 2>/dev/null || echo 0)
 
   if ((file_size > max_size)); then
     die 1 "File too large: $file_size bytes (maximum: $max_size bytes / 10MB)"
@@ -153,7 +150,8 @@ validate_file_size() {
 
 # Cleanup function called on exit/interrupt
 cleanup() {
-  local -i exitcode=${1:-0}
+  local -i exitcode=${1:-$?}
+  trap - SIGINT SIGTERM EXIT          # ← prevent recursion
   # Reset terminal to clean state
   [[ -z ${ANSI_RESET:-} ]] || printf '%s' "$ANSI_RESET"
   exit "$exitcode"
@@ -173,58 +171,10 @@ install_signal_handlers() {
 # Usage: noarg "$1" "$2" (checks if $2 exists and doesn't start with -)
 noarg() {
   if (($# < 2)) || [[ ${2:0:1} == '-' ]]; then
-    die 2 "Missing argument for option ${1@Q}'"
+    die 22 "Missing argument for option ${1@Q}"
   fi
   return 0
 }
-
-# --------------------------------------------------------------------------------
-# String manipulation
-
-# Trim leading and trailing whitespace
-# Usage: trim "  text  "
-trim() {
-  local -- v="$*"
-  v="${v#"${v%%[![:blank:]]*}"}"
-  echo -n "${v%"${v##*[![:blank:]]}"}"
-}
-
-# Pluralization helper
-# Usage: echo "Found $count file$(s $count)"
-s() { (( ${1:-1} == 1 )) || echo -n 's'; }
-
-# --------------------------------------------------------------------------------
-# ReDoS protection using timeout command
-
-# Safe regex substitution with timeout
-# Usage: safe_regex_sub "pattern" "replacement" "text" [timeout_seconds]
-safe_regex_sub() {
-  local -- pattern=$1
-  local -- replacement=$2
-  local -- text=$3
-  local -i timeout=${4:-1}
-
-  # For simple patterns (short, no quantifiers), execute directly
-  if ((${#pattern} < 50 )) && [[ ! $pattern =~ [\*\+\{\?] ]]; then
-    #shellcheck disable=SC2001
-    sed "s/$pattern/$replacement/g" <<<"$text" 2>/dev/null || echo "$text"
-    return $?
-  fi
-
-  # For complex patterns, use timeout command
-  if timeout "$timeout" sed "s/$pattern/$replacement/g" <<<"$text" 2>/dev/null; then
-    return 0
-  else
-    warn "Regex timeout for pattern: ${pattern:0:50}..."
-    echo "$text"  # Return original on timeout
-    return 1
-  fi
-}
-
-# --------------------------------------------------------------------------------
-# Display declared variables (debugging aid)
-# Usage: decp VAR1 VAR2
-decp() { declare -p "$@" | sed 's/^declare -[a-zA-Z-]* //'; }
 
 # ================================================================================
 # ANSI Color Definitions
@@ -238,10 +188,10 @@ decp() { declare -p "$@" | sed 's/^declare -[a-zA-Z-]* //'; }
 declare -i HAS_COLOR=0
 
 # Check if we have a terminal
-if [[ -t 2 ]] || [[ -t 1 ]] || [[ -n ${TERM:-} && $TERM != dumb ]]; then
+if [[ -t 1 && -t 2 ]] || [[ -n ${TERM:-} && $TERM != dumb ]]; then
   declare -i color_count
   color_count=$(tput colors 2>/dev/null || echo 0)
-  ((color_count >= 256)) && HAS_COLOR=1 ||:
+  ((color_count < 256)) || HAS_COLOR=1
 fi
 readonly -- HAS_COLOR
 
@@ -439,7 +389,7 @@ render_header() {
   local -- color formatted_text
 
   # Determine color based on header level
-  case "${#hashes}" in
+  case ${#hashes} in
     1) color="$COLOR_H1" ;;
     2) color="$COLOR_H2" ;;
     3) color="$COLOR_H3" ;;
@@ -619,14 +569,14 @@ render_code_line() {
   fi
 
   # Normalize language name
-  case "${lang,,}" in
+  case ${lang,,} in
     py) lang='python' ;;
     js) lang='javascript' ;;
     sh|shell) lang='bash' ;;
   esac
 
   # Apply simple syntax highlighting based on language
-  case "${lang,,}" in
+  case ${lang,,} in
     python)
       output=$(highlight_python "$code")
       ;;
@@ -788,10 +738,12 @@ _parse_table_structure() {
   local -n _alignments=$3
   local -n _has_alignment=$4
   local -n _col_count=$5
+  local -i is_alignment=1
 
   local -- line cell
   local -a cells
   local -i row_num=0 max_cols=0 i
+  local -- row_str
 
   for line in "${_table_lines[@]}"; do
     # Remove leading/trailing whitespace
@@ -815,7 +767,7 @@ _parse_table_structure() {
 
     # Check if this is an alignment row (row 2, all cells match :?-+:?)
     if ((row_num == 1)); then
-      local -i is_alignment=1
+      is_alignment=1
       for cell in "${cells[@]}"; do
         [[ $cell =~ ^:?-+:?$ ]] || { is_alignment=0; break; }
       done
@@ -836,12 +788,11 @@ _parse_table_structure() {
     fi
 
     # Store row (as delimited string for easier handling)
-    local -- row_str
     printf -v row_str '%s\037' "${cells[@]}"  # Use unit separator character
     _all_rows+=("$row_str")
 
     # Track maximum column count
-    ((${#cells[@]} > max_cols)) && max_cols=${#cells[@]} ||:
+    ((${#cells[@]} <= max_cols)) || max_cols=${#cells[@]}
     row_num+=1
   done
 
@@ -884,7 +835,7 @@ _calculate_column_widths() {
       width=${#stripped_cell}
 
       # Update max width for this column
-      ((width > _col_widths[i])) && _col_widths[i]=$width ||:
+      ((width <= _col_widths[i])) || _col_widths[i]=$width
     done
   done
 
@@ -912,9 +863,9 @@ _render_table_output() {
   # --------------------------------------------------------------------------------
   # Build horizontal divider line
   horiz_line='+'
+  local -- dashes
   for ((i=0; i<_col_count; i+=1)); do
     width=${_col_widths[i]}
-    local -- dashes
     printf -v dashes '%*s' $((width + 2)) ''
     horiz_line+=${dashes// /-}
     horiz_line+='+'
@@ -990,9 +941,9 @@ _align_cell() {
 
   # Calculate padding needed
   padding=$((width - visible_len))
-  ((padding < 0)) && padding=0 ||:
+  ((padding >= 0)) || padding=0
 
-  case "$alignment" in
+  case $alignment in
     center)
       # Center alignment
       left_pad=$((padding / 2))
@@ -1218,7 +1169,7 @@ parse_markdown() {
 
   # --------------------------------------------------------------------------------
   # Render footnotes section at end if any exist
-  if ((OPTIONS[footnotes])) && ((${#FOOTNOTES[@]} > 0)) && ((${#FOOTNOTE_REFS[@]} > 0)); then
+  if ((OPTIONS[footnotes])) && ((${#FOOTNOTES[@]})) && ((${#FOOTNOTE_REFS[@]})); then
     render_footnotes
   fi
 }
@@ -1257,9 +1208,6 @@ render_footnotes() {
 # ================================================================================
 # Main Script Functions
 # ================================================================================
-
-# Install signal handlers
-install_signal_handlers
 
 # Usage documentation
 usage() {
@@ -1337,7 +1285,7 @@ parse_arguments() {
         exit 0
         ;;
       -h|--help)
-        usage;
+        usage
         exit 0
         ;;
       -t|--plain)
@@ -1395,17 +1343,19 @@ parse_arguments() {
 process_file() {
   local -- filepath=${1:-}
   local -a lines=()
-  local -- content line
+  local -- line
 
   if [[ -n "$filepath" ]]; then
     # Process file
-    debug "Processing file: $filepath"
+    debug "Processing file ${filepath@Q}"
     validate_file_size "$filepath" "$MAX_FILE_SIZE"
 
     # Read file into array, handling encoding issues
     while IFS= read -r line || [[ -n "$line" ]]; do
       # Skip shebang to prevent treating it as markdown content
-      ((${#lines[@]} == 0)) && [[ "$line" =~ ^\#! ]] && continue ||:
+      if ((${#lines[@]} == 0)) && [[ "$line" =~ ^\#! ]]; then
+        continue
+      fi
       lines+=("$line")
     done <"$filepath"
   else
@@ -1423,7 +1373,9 @@ process_file() {
       fi
 
       # Skip shebang to prevent treating it as markdown content
-      ((${#lines[@]} == 0)) && [[ "$line" =~ ^\#! ]] && continue ||:
+      if ((${#lines[@]} == 0)) && [[ "$line" =~ ^\#! ]]; then
+        continue
+      fi
       lines+=("$line")
     done
   fi
@@ -1437,13 +1389,17 @@ process_file() {
 # Main function
 
 main() {
-  local -i exitcode=0
+  install_signal_handlers
 
   # Parse command-line arguments
   parse_arguments "$@"
 
   # Determine terminal width
   ((TERM_WIDTH)) || TERM_WIDTH=$(get_terminal_width)
+
+  readonly -- DEBUG TERM_WIDTH
+  readonly -A OPTIONS
+  readonly -a INPUT_FILES
 
   debug "Terminal width: $TERM_WIDTH"
   debug "Options: $(declare -p OPTIONS | sed 's/declare -A //')"
@@ -1452,13 +1408,13 @@ main() {
   printf '%s' "$ANSI_RESET"
 
   # Process files or stdin
-  if ((${#INPUT_FILES[@]} > 0)); then
+  if ((${#INPUT_FILES[@]})); then
     local -- file
     for file in "${INPUT_FILES[@]}"; do
       process_file "$file"
 
       # Add newline between files if processing multiple
-      if ((${#INPUT_FILES[@]})); then
+      if ((${#INPUT_FILES[@]}>1)); then
         echo
       fi
     done
@@ -1470,7 +1426,7 @@ main() {
   # Ensure terminal colors are reset at the end
   printf '%s' "$ANSI_RESET"
 
-  return "$exitcode"
+  return 0
 }
 
 # Script invocation

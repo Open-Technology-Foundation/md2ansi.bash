@@ -122,6 +122,10 @@ check_prerequisites() {
     "md2ansi.bash_completion"
     "display-ansi-palette"
     "md-link-extract"
+    "mdview"
+    "mdview.conf"
+    "themes/github-dark.css"
+    "themes/github-dark.theme"
   )
 
   local file
@@ -148,7 +152,7 @@ validate_scripts() {
   fi
 
   info "Validating scripts with shellcheck..."
-  local -a scripts=("md2ansi" "md" "display-ansi-palette" "md-link-extract")
+  local -a scripts=("md2ansi" "md" "display-ansi-palette" "md-link-extract" "mdview")
 
   local script
   for script in "${scripts[@]}"; do
@@ -222,7 +226,7 @@ install_files() {
 
   # Install executables
   info "Installing executables..."
-  local -a executables=("md2ansi" "md" "display-ansi-palette" "md-link-extract")
+  local -a executables=("md2ansi" "md" "display-ansi-palette" "md-link-extract" "mdview")
   local exec_file target
   for exec_file in "${executables[@]}"; do
     target="${bindir}/${exec_file}"
@@ -247,6 +251,27 @@ install_files() {
     die "Failed to install bash completion"
   INSTALLED_FILES+=("$completion_target")
   success "Installed: bash completion"
+
+  # Install mdview data files
+  local datadir="${prefix}/share/mdview"
+  info "Installing mdview data files..."
+  mkdir -p "${datadir}/themes" || die "Failed to create ${datadir}/themes"
+
+  local data_target="${datadir}/mdview.conf"
+  install -m 0644 "${SCRIPT_DIR}/mdview.conf" "$data_target" || \
+    die "Failed to install mdview.conf"
+  INSTALLED_FILES+=("$data_target")
+  success "Installed: mdview.conf"
+
+  local theme_file
+  for theme_file in "${SCRIPT_DIR}"/themes/*.css "${SCRIPT_DIR}"/themes/*.theme; do
+    [[ -f "$theme_file" ]] || continue
+    data_target="${datadir}/themes/${theme_file##*/}"
+    install -m 0644 "$theme_file" "$data_target" || \
+      die "Failed to install ${theme_file##*/}"
+    INSTALLED_FILES+=("$data_target")
+    success "Installed: themes/${theme_file##*/}"
+  done
 
   # Update man database
   if command -v mandb >/dev/null 2>&1; then

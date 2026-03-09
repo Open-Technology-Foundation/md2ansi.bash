@@ -19,6 +19,7 @@ This is a pure Bash implementation of the md2ansi markdown-to-ANSI formatter, de
 - ✓ Syntax highlighting for Python, JavaScript, and Bash
 - ✓ Security features (file size limits, input sanitization, ReDoS protection)
 - ✓ Compatible with Python version's command-line interface
+- ✓ Browser-based markdown preview with pandoc (`mdview`)
 
 ## Quick Start
 
@@ -32,7 +33,7 @@ git clone https://github.com/Open-Technology-Foundation/md2ansi.bash.git
 cd md2ansi.bash
 
 # Make scripts executable
-chmod +x md2ansi md display-ansi-palette md-link-extract
+chmod +x md2ansi md display-ansi-palette md-link-extract mdview
 
 # Test it
 md2ansi --version
@@ -51,6 +52,7 @@ This installs to `/usr/local` by default:
 - Executables → `/usr/local/bin/`
 - Man page → `/usr/local/share/man/man1/`
 - Bash completion → `/usr/local/share/bash-completion/completions/`
+- mdview data → `/usr/local/share/mdview/` (config + themes)
 
 **User-local installation** (no sudo required):
 
@@ -62,6 +64,7 @@ This installs to `~/.local`:
 - Executables → `~/.local/bin/`
 - Man page → `~/.local/share/man/man1/`
 - Bash completion → `~/.local/share/bash-completion/completions/`
+- mdview data → `~/.local/share/mdview/` (config + themes)
 
 **Custom installation prefix**:
 
@@ -116,6 +119,7 @@ sudo install -m 0755 md2ansi /usr/local/bin/
 sudo install -m 0755 md /usr/local/bin/
 sudo install -m 0755 display-ansi-palette /usr/local/bin/
 sudo install -m 0755 md-link-extract /usr/local/bin/
+sudo install -m 0755 mdview /usr/local/bin/
 
 # Install manpage
 sudo install -m 0644 md2ansi.1 /usr/local/share/man/man1/
@@ -123,6 +127,11 @@ sudo mandb  # Update man database
 
 # Install bash completion
 sudo install -m 0644 md2ansi.bash_completion /usr/local/share/bash-completion/completions/md2ansi
+
+# Install mdview data (config + themes)
+sudo mkdir -p /usr/local/share/mdview/themes
+sudo install -m 0644 mdview.conf /usr/local/share/mdview/
+sudo install -m 0644 themes/*.css themes/*.theme /usr/local/share/mdview/themes/
 
 # Verify installation
 md2ansi --version
@@ -170,6 +179,9 @@ echo "# Hello **World**" | md2ansi
 
 # Multiple files
 md2ansi file1.md file2.md file3.md
+
+# Preview in browser (requires pandoc)
+mdview README.md
 
 # View the manual
 man md2ansi
@@ -313,6 +325,57 @@ md-link-extract *.md | wc -l          # Count total links
 - Finding broken documentation links
 - Creating link inventories
 - SEO analysis
+
+### `mdview` - Browser-Based Markdown Preview
+
+View markdown files as styled HTML in a browser window. Converts markdown via pandoc with configurable themes and syntax highlighting:
+
+```bash
+mdview README.md                          # Open in browser with default theme
+mdview --theme github-dark doc.md         # Specify theme
+mdview --window-size 1200x900 README.md   # Custom browser window size
+mdview --browser /usr/bin/firefox doc.md  # Override browser
+```
+
+**Requires:** `pandoc` (the only external dependency in the project)
+
+**Features:**
+- Automatic browser detection (Google Chrome, Chromium, or xdg-open fallback)
+- Configurable themes via CSS + highlight-style pairs
+- XDG-compliant configuration hierarchy
+- Safe for sourcing as a Bash library (`source mdview`)
+- Automatic temp file cleanup (30-second delayed removal)
+- `--app` mode for Chrome/Chromium (clean window without browser chrome)
+
+**Configuration:**
+
+| Level | Config File | Theme Directory |
+|:------|:------------|:----------------|
+| System | `<prefix>/share/mdview/mdview.conf` | `<prefix>/share/mdview/themes/` |
+| User | `${XDG_CONFIG_HOME:-~/.config}/mdview/mdview.conf` | `${XDG_DATA_HOME:-~/.local/share}/mdview/themes/` |
+
+Precedence: CLI flags > user config > system config > defaults
+
+Each theme requires two files: `<name>.css` (page styling) and `<name>.theme` (pandoc syntax highlight style).
+
+**Options:**
+
+| Option | Description | Default |
+|:-------|:------------|:--------|
+| `-t, --theme NAME` | Theme name | `github-dark` |
+| `-s, --window-size WxH` | Browser window dimensions | `960x1080` |
+| `-b, --browser PATH` | Browser executable | auto-detect |
+| `-V, --version` | Show version | |
+| `-h, --help` | Show help | |
+
+**Sourced mode:**
+
+```bash
+source mdview           # Import mdview() function
+mdview README.md        # Call directly
+```
+
+When sourced, `mdview` does not impose `set -e` or modify the caller's shell traps.
 
 ## Command-Line Options
 
@@ -532,7 +595,7 @@ diff <(md2ansi version1.md) <(md2ansi version2.md)
 | **Installation** | Copy one file | `pip install` | Bash: zero dependencies |
 | **Startup Time** | ~50ms | ~30ms | Bash slightly slower |
 | **Processing Speed** | 2-3x slower | Baseline | Python faster for large files |
-| **File Size** | 1,460 lines (43KB) | ~800 lines | Bash more verbose |
+| **File Size** | 1,434 lines (42KB) | ~800 lines | Bash more verbose (md2ansi only) |
 | **Dependencies** | None (coreutils only) | Python 3.7+ | Bash more portable |
 | **Design** | Monolithic single file | Single module | Both self-contained |
 | **Features** | 100% compatible | Full feature set | Identical CLI |
@@ -579,7 +642,7 @@ diff <(md2ansi version1.md) <(md2ansi version2.md)
 
 ### Design Philosophy
 
-md2ansi follows a **monolithic single-file design** for maximum portability and zero installation friction. All functionality is embedded in one executable file (`md2ansi`, 1,460 lines) with no external libraries or modules.
+md2ansi follows a **monolithic single-file design** for maximum portability and zero installation friction. All core functionality is embedded in one executable file (`md2ansi`, 1,434 lines) with no external libraries or modules. The `mdview` browser preview utility (218 lines) is a separate companion script.
 
 **Design Benefits:**
 
@@ -596,12 +659,17 @@ md2ansi follows a **monolithic single-file design** for maximum portability and 
 
 ```
 md2ansi.bash/
-├── md2ansi               # Main executable (1,460 lines, 43KB)
+├── md2ansi               # Main executable (1,434 lines, 42KB)
 │                         # ◉ All functionality in single file
 ├── md2ansi.bash          # Symlink → md2ansi
 ├── md                    # Pagination wrapper (15 lines)
 ├── display-ansi-palette  # Color palette viewer (72 lines)
 ├── md-link-extract       # Link extractor (54 lines)
+├── mdview                # Browser-based markdown preview (218 lines)
+├── mdview.conf           # Default mdview configuration
+├── themes/               # mdview theme files
+│   ├── github-dark.css   # Page styling
+│   └── github-dark.theme # Pandoc syntax highlight style
 ├── md2ansi.1             # Man page
 ├── md2ansi.bash_completion # Bash completion
 ├── Makefile              # Build/install targets
@@ -612,19 +680,21 @@ md2ansi.bash/
     ├── run_tests         # Test suite runner (181 lines)
     ├── test_basic.sh     # Basic features (128 lines)
     ├── test_code.sh      # Code blocks (168 lines)
-    ├── test_tables.sh    # Tables (96 lines)
-    ├── test_footnotes.sh # Footnotes (105 lines)
-    ├── test_wrapping.sh  # Text wrapping (182 lines)
     ├── test_edge_cases.sh # Edge cases (207 lines)
+    ├── test_footnotes.sh # Footnotes (105 lines)
+    ├── test_gaps.sh      # Audit gap coverage (163 lines)
+    ├── test_mdview.sh    # mdview utility tests (173 lines)
     ├── test_options.sh   # Feature toggles (96 lines)
-    └── test_security.sh  # Security features (131 lines)
+    ├── test_security.sh  # Security features (131 lines)
+    ├── test_tables.sh    # Tables (96 lines)
+    └── test_wrapping.sh  # Text wrapping (182 lines)
 ```
 
 **Total Project Size:**
-- Main executable: 1,460 lines
-- Utility scripts: 141 lines
-- Test suite: 1,294 lines
-- **Total: 2,895 lines**
+- Main executable: 1,434 lines
+- Utility scripts: 359 lines
+- Test suite: 1,630 lines
+- **Total: 3,423 lines**
 
 ### Internal Code Organization
 
@@ -697,21 +767,23 @@ FOOTNOTE_REFS=()          # Array tracking footnote reference order
 
 ### Test Suite
 
-The project includes a comprehensive test suite with 8 test files covering all features:
+The project includes a comprehensive test suite with 10 test files covering all features:
 
 | Test File | Lines | Coverage |
 |:----------|:------|:---------|
 | **run_tests** | 181 | Test runner with assertion framework |
 | **test_basic.sh** | 128 | Headers, inline formatting, lists, links, images, horizontal rules |
 | **test_code.sh** | 168 | Fenced code blocks, syntax highlighting, language detection, code fence types |
-| **test_tables.sh** | 96 | Table parsing, alignment (left/center/right), borders, inline formatting in cells |
-| **test_footnotes.sh** | 105 | Footnote references, definitions, ordering, missing definitions |
-| **test_wrapping.sh** | 182 | Text wrapping, ANSI-aware wrapping, terminal width handling |
 | **test_edge_cases.sh** | 207 | Empty files, malformed input, edge cases, error handling |
+| **test_footnotes.sh** | 105 | Footnote references, definitions, ordering, missing definitions |
+| **test_gaps.sh** | 163 | Audit gap coverage, combined flag parsing, fence mismatch handling |
+| **test_mdview.sh** | 173 | mdview CLI options, argument validation, sourced mode, full pipeline |
 | **test_options.sh** | 96 | Feature toggles, --no-* options, plain mode, option combinations |
 | **test_security.sh** | 131 | File size limits, line length limits, input sanitization, ReDoS protection |
+| **test_tables.sh** | 96 | Table parsing, alignment (left/center/right), borders, inline formatting in cells |
+| **test_wrapping.sh** | 182 | Text wrapping, ANSI-aware wrapping, terminal width handling |
 
-**Total test coverage: 1,294 lines**
+**Total test coverage: 1,630 lines**
 
 ### Running Tests
 
@@ -722,12 +794,14 @@ The project includes a comprehensive test suite with 8 test files covering all f
 # Run individual test files
 ./test/test_basic.sh
 ./test/test_code.sh
-./test/test_tables.sh
-./test/test_footnotes.sh
-./test/test_wrapping.sh
 ./test/test_edge_cases.sh
+./test/test_footnotes.sh
+./test/test_gaps.sh
+./test/test_mdview.sh
 ./test/test_options.sh
 ./test/test_security.sh
+./test/test_tables.sh
+./test/test_wrapping.sh
 ```
 
 ### Test Framework
@@ -756,6 +830,9 @@ echo "# Test\n\nThis is **bold** text." | ./md2ansi
 
 # Test link extraction
 ./md-link-extract README.md
+
+# Test browser preview (requires pandoc)
+./mdview README.md
 
 # Test with debug output
 ./md2ansi -D README.md 2>debug.log
@@ -967,7 +1044,7 @@ A: Make sure you're in the repository directory or use the full path. Check that
 
 **Q: Permission denied error?**
 
-A: Run `chmod +x md2ansi md display-ansi-palette md-link-extract` to make scripts executable.
+A: Run `chmod +x md2ansi md display-ansi-palette md-link-extract mdview` to make scripts executable.
 
 **Q: Output is garbled?**
 
@@ -1019,7 +1096,7 @@ A: Zero installation friction. One file to copy, no broken dependencies. The cod
 
 **Q: Can I use this as a library?**
 
-A: It's designed as a standalone executable, but you can source it and call `parse_markdown` directly if needed.
+A: `md2ansi` is designed as a standalone executable, but you can source it and call `parse_markdown` directly if needed. The `mdview` utility is explicitly designed to work in both script and sourced modes.
 
 ## Known Limitations
 
@@ -1040,7 +1117,7 @@ A: It's designed as a standalone executable, but you can source it and call `par
 | Requirement | Tool/Process |
 |:------------|:-------------|
 | **Code Style** | Follow Bash Coding Standard strictly |
-| **Linting** | Run `shellcheck md2ansi md test/*.sh` with zero warnings |
+| **Linting** | Run `shellcheck md2ansi md mdview test/*.sh` with zero warnings |
 | **Testing** | Add tests for new features, all tests must pass |
 | **Compatibility** | Maintain CLI compatibility with Python version |
 | **Documentation** | Update README for new features, keep accurate |
@@ -1053,7 +1130,7 @@ A: It's designed as a standalone executable, but you can source it and call `par
 vim md2ansi
 
 # 2. Run shellcheck (must pass with zero warnings)
-shellcheck md2ansi md test/*.sh
+shellcheck md2ansi md mdview test/*.sh
 
 # 3. Run test suite (all tests must pass)
 ./test/run_tests
@@ -1094,10 +1171,11 @@ All tools are standard and available on any modern Linux/Unix system:
 | `timeout` | coreutils | ReDoS protection wrapper |
 | `less` | util-linux | Pagination in `md` wrapper |
 | `stty` | coreutils | Terminal size detection fallback |
+| `pandoc` | pandoc | Markdown-to-HTML conversion (`mdview` only) |
 
-**Zero additional dependencies required!**
+**Zero additional dependencies** for `md2ansi`, `md`, `display-ansi-palette`, and `md-link-extract` — only standard POSIX/GNU utilities.
 
-All tools are part of standard POSIX/GNU utilities installed by default on Linux, macOS (with Homebrew), and BSD systems.
+The `mdview` utility additionally requires `pandoc` for HTML conversion. All other tools are installed by default on Linux, macOS (with Homebrew), and BSD systems.
 
 ## License
 
@@ -1115,13 +1193,13 @@ See [LICENSE](LICENSE) file for full text.
 
 | Metric | Value |
 |:-------|:------|
-| **md2ansi Lines** | 1,460 lines (43KB) |
-| **Total Scripts** | 4 main + 1 test runner + 8 test files |
-| **Test Coverage** | 1,294 lines across 8 test files |
-| **Total Project** | 2,895 lines |
+| **md2ansi Lines** | 1,434 lines (42KB) |
+| **Total Scripts** | 5 main + 1 test runner + 10 test files |
+| **Test Coverage** | 1,630 lines across 10 test files |
+| **Total Project** | 3,423 lines |
 | **Features** | 15+ markdown elements |
 | **Dependencies** | 0 (zero) |
-| **Installation** | Single file copy |
+| **Installation** | Single file copy (md2ansi); mdview adds themes |
 | **Architecture** | Monolithic single-file design |
 | **Languages Highlighted** | Python, JavaScript, Bash |
 | **Security Features** | 7+ protections |

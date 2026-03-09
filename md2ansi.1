@@ -275,6 +275,15 @@ Generate plain text output without colors:
 md2ansi --plain README.md > output.txt
 .fi
 .RE
+.SS "Browser Preview with mdview"
+Preview a Markdown file in the browser:
+.PP
+.RS
+.nf
+mdview README.md
+mdview --theme github-dark --window-size 1200x900 doc.md
+.fi
+.RE
 .SS "Integration with Other Tools"
 Use in shell scripts or pipelines:
 .PP
@@ -335,6 +344,26 @@ Utility to display all 256 ANSI colors supported by the terminal
 .TP
 .I md-link-extract
 Utility to extract and list all URLs from markdown files
+.TP
+.I mdview
+Browser-based Markdown preview utility. Converts Markdown to styled HTML via
+.BR pandoc (1)
+and opens it in a browser window. Supports configurable themes,
+XDG-compliant configuration, and automatic temp file cleanup. Requires
+.B pandoc
+to be installed.
+.TP
+.I mdview.conf
+Default configuration file for
+.BR mdview .
+Installed to <prefix>/share/mdview/mdview.conf. Sets default theme,
+window size, and browser preferences as MDVIEW_* variables.
+.TP
+.I themes/
+Theme directory for
+.BR mdview .
+Each theme consists of a CSS file (page styling) and a .theme file (pandoc
+syntax highlighting style). Installed to <prefix>/share/mdview/themes/.
 .SH ENVIRONMENT
 .TP
 .B TERM
@@ -347,6 +376,30 @@ size
 .B LESS
 Options passed to less when using the md wrapper. The wrapper sets -FXRS by
 default (auto-exit, no init, raw ANSI, no line wrap)
+.SS "mdview Environment Variables"
+.TP
+.B MDVIEW_THEME
+Theme name for mdview (default: github-dark). Overridden by \-t/\-\-theme.
+.TP
+.B MDVIEW_WINDOW_SIZE
+Browser window dimensions as WIDTHxHEIGHT (default: 960x1080). Overridden by
+\-s/\-\-window\-size.
+.TP
+.B MDVIEW_BROWSER
+Browser executable path. If unset, mdview auto-detects: google-chrome,
+chromium-browser, chromium, then xdg-open. Overridden by \-b/\-\-browser.
+.TP
+.B XDG_CONFIG_HOME
+Base directory for user configuration files (default: ~/.config). mdview reads
+$XDG_CONFIG_HOME/mdview/mdview.conf if it exists.
+.TP
+.B XDG_DATA_HOME
+Base directory for user data files (default: ~/.local/share). mdview searches
+$XDG_DATA_HOME/mdview/themes/ for user-installed themes.
+.TP
+.B XDG_RUNTIME_DIR
+Base directory for runtime files (default: /tmp). mdview creates temporary HTML
+files in $XDG_RUNTIME_DIR/mdview/.
 .SH EXIT STATUS
 .TP
 .B 0

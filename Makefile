@@ -7,6 +7,7 @@ PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 MANDIR ?= $(PREFIX)/share/man/man1
 COMPLETIONDIR ?= $(PREFIX)/share/bash-completion/completions
+DATADIR ?= $(PREFIX)/share/mdview
 
 # For user-local installation, use:
 # make install-local (automatically uses ~/.local paths)
@@ -16,7 +17,7 @@ MAIN_SCRIPT = md2ansi
 WRAPPER_SCRIPT = md
 MANPAGE = md2ansi.1
 COMPLETION = md2ansi.bash_completion
-UTILITIES = display-ansi-palette md-link-extract
+UTILITIES = display-ansi-palette md-link-extract mdview
 
 # Installation variables
 INSTALL = install
@@ -45,6 +46,7 @@ all:
 	@echo "  BINDIR:        $(BINDIR)"
 	@echo "  MANDIR:        $(MANDIR)"
 	@echo "  COMPLETIONDIR: $(COMPLETIONDIR)"
+	@echo "  DATADIR:       $(DATADIR)"
 	@echo ""
 	@echo "To customize installation path, use:"
 	@echo "  make install PREFIX=/custom/path"
@@ -66,6 +68,12 @@ install:
 
 	@echo "  Installing bash completion to $(COMPLETIONDIR)..."
 	$(INSTALL_DATA) $(COMPLETION) $(COMPLETIONDIR)/md2ansi
+
+	@echo "  Installing mdview data to $(DATADIR)..."
+	$(MKDIR_P) $(DATADIR)/themes
+	$(INSTALL_DATA) mdview.conf $(DATADIR)/
+	$(INSTALL_DATA) themes/*.css $(DATADIR)/themes/
+	$(INSTALL_DATA) themes/*.theme $(DATADIR)/themes/
 
 	@echo "  Updating man database..."
 	-mandb 2>/dev/null || true
@@ -103,6 +111,10 @@ uninstall:
 	$(RM_F) $(addprefix $(BINDIR)/,$(UTILITIES))
 	$(RM_F) $(MANDIR)/$(MANPAGE)
 	$(RM_F) $(COMPLETIONDIR)/md2ansi
+	$(RM_F) $(DATADIR)/mdview.conf
+	$(RM_F) $(DATADIR)/themes/*.css $(DATADIR)/themes/*.theme
+	-rmdir $(DATADIR)/themes 2>/dev/null || true
+	-rmdir $(DATADIR) 2>/dev/null || true
 
 	@echo "  Updating man database..."
 	-mandb 2>/dev/null || true
