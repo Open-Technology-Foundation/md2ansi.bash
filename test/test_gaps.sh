@@ -62,8 +62,8 @@ else
   assert_fail "Combined -tD should produce debug output"
 fi
 
-# -w80 (value attached to flag) - should fail because splitter splits characters
-assert_exit_code 2 "echo test | ./md2ansi -w80 2>&1" "Attached value -w80 returns error (not supported)"
+# -w80 splits as -w + -80 (stacking prefixes dash), so -80 fails width validation
+assert_exit_code 22 "echo test | ./md2ansi -w80 2>&1" "Attached value -w80 returns exit 22 (invalid width)"
 
 # Invalid combined option returns error (e.g., -Dz)
 assert_exit_code 22 "echo test | ./md2ansi -Dz 2>&1" "Invalid combined option -Dz returns error"
