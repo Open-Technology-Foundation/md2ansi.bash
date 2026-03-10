@@ -1,147 +1,74 @@
-# Makefile for md2ansi.bash
-# Copyright (c) 2024 Open Technology Foundation
-# Licensed under GPL-3.0
+# Makefile - Install md2ansi
+# BCS1212 compliant
 
-# Installation paths - customize as needed
-PREFIX ?= /usr/local
-BINDIR ?= $(PREFIX)/bin
-MANDIR ?= $(PREFIX)/share/man/man1
-COMPLETIONDIR ?= $(PREFIX)/share/bash-completion/completions
+PREFIX  ?= /usr/local
+BINDIR  ?= $(PREFIX)/bin
+MANDIR  ?= $(PREFIX)/share/man/man1
+COMPDIR ?= /etc/bash_completion.d
 DATADIR ?= $(PREFIX)/share/mdview
+DESTDIR ?=
 
-# For user-local installation, use:
-# make install-local (automatically uses ~/.local paths)
+.PHONY: all install uninstall check test clean help
 
-# Source files
-MAIN_SCRIPT = md2ansi
-WRAPPER_SCRIPT = md
-MANPAGE = md2ansi.1
-COMPLETION = md2ansi.bash_completion
-UTILITIES = display-ansi-palette md-link-extract mdview
+all: help
 
-# Installation variables
-INSTALL = install
-INSTALL_PROGRAM = $(INSTALL) -m 0755
-INSTALL_DATA = $(INSTALL) -m 0644
-MKDIR_P = mkdir -p
-RM_F = rm -f
-
-# Phony targets
-.PHONY: all install uninstall install-local test clean help
-
-# Default target
-all:
-	@echo "md2ansi.bash - Makefile"
-	@echo ""
-	@echo "Available targets:"
-	@echo "  install        - Install to system directories (requires sudo)"
-	@echo "  install-local  - Install to ~/.local (no sudo required)"
-	@echo "  uninstall      - Remove installed files from system"
-	@echo "  test           - Run shellcheck and test suite"
-	@echo "  clean          - Remove temporary files"
-	@echo "  help           - Show this help message"
-	@echo ""
-	@echo "Installation paths (current settings):"
-	@echo "  PREFIX:        $(PREFIX)"
-	@echo "  BINDIR:        $(BINDIR)"
-	@echo "  MANDIR:        $(MANDIR)"
-	@echo "  COMPLETIONDIR: $(COMPLETIONDIR)"
-	@echo "  DATADIR:       $(DATADIR)"
-	@echo ""
-	@echo "To customize installation path, use:"
-	@echo "  make install PREFIX=/custom/path"
-
-# System-wide installation (requires root/sudo)
 install:
-	@echo "Installing md2ansi to $(PREFIX)..."
-	$(MKDIR_P) $(BINDIR)
-	$(MKDIR_P) $(MANDIR)
-	$(MKDIR_P) $(COMPLETIONDIR)
-
-	@echo "  Installing executables to $(BINDIR)..."
-	$(INSTALL_PROGRAM) $(MAIN_SCRIPT) $(BINDIR)/
-	$(INSTALL_PROGRAM) $(WRAPPER_SCRIPT) $(BINDIR)/
-	$(INSTALL_PROGRAM) $(UTILITIES) $(BINDIR)/
-
-	@echo "  Installing manpage to $(MANDIR)..."
-	$(INSTALL_DATA) $(MANPAGE) $(MANDIR)/
-
-	@echo "  Installing bash completion to $(COMPLETIONDIR)..."
-	$(INSTALL_DATA) $(COMPLETION) $(COMPLETIONDIR)/md2ansi
-
-	@echo "  Installing mdview data to $(DATADIR)..."
-	$(MKDIR_P) $(DATADIR)/themes
-	$(INSTALL_DATA) mdview.conf $(DATADIR)/
-	$(INSTALL_DATA) themes/*.css $(DATADIR)/themes/
-	$(INSTALL_DATA) themes/*.theme $(DATADIR)/themes/
-
-	@echo "  Updating man database..."
-	-mandb 2>/dev/null || true
-
-	@echo ""
-	@echo "Installation complete!"
-	@echo ""
-	@echo "You can now use:"
-	@echo "  md2ansi <file>    - Convert markdown to ANSI"
-	@echo "  md <file>         - View with pagination"
-	@echo "  man md2ansi       - View manual page"
-	@echo ""
-	@echo "Bash completion will be available in new shell sessions."
-
-# User-local installation (no root required)
-install-local:
-	@echo "Installing md2ansi to ~/.local..."
-	$(MAKE) install \
-		PREFIX=$$HOME/.local \
-		COMPLETIONDIR=$$HOME/.local/share/bash-completion/completions
-	@echo ""
-	@echo "NOTE: Ensure ~/.local/bin is in your PATH:"
-	@echo "  export PATH=\"\$$HOME/.local/bin:\$$PATH\""
-	@echo ""
-	@echo "To enable bash completion, add to ~/.bashrc:"
-	@echo "  if [ -f ~/.local/share/bash-completion/completions/md2ansi ]; then"
-	@echo "    . ~/.local/share/bash-completion/completions/md2ansi"
-	@echo "  fi"
-
-# Uninstall from system
-uninstall:
-	@echo "Uninstalling md2ansi from $(PREFIX)..."
-	$(RM_F) $(BINDIR)/$(MAIN_SCRIPT)
-	$(RM_F) $(BINDIR)/$(WRAPPER_SCRIPT)
-	$(RM_F) $(addprefix $(BINDIR)/,$(UTILITIES))
-	$(RM_F) $(MANDIR)/$(MANPAGE)
-	$(RM_F) $(COMPLETIONDIR)/md2ansi
-	$(RM_F) $(DATADIR)/mdview.conf
-	$(RM_F) $(DATADIR)/themes/*.css $(DATADIR)/themes/*.theme
-	-rmdir $(DATADIR)/themes 2>/dev/null || true
-	-rmdir $(DATADIR) 2>/dev/null || true
-
-	@echo "  Updating man database..."
-	-mandb 2>/dev/null || true
-
-	@echo "Uninstallation complete!"
-
-# Run shellcheck validation and test suite
-test:
-	@echo "Running shellcheck validation..."
-	@if command -v shellcheck >/dev/null 2>&1; then \
-		shellcheck $(MAIN_SCRIPT) $(WRAPPER_SCRIPT) $(UTILITIES) || \
-		(echo "Shellcheck found issues. Please fix before installation." && exit 1); \
-		echo "All scripts passed shellcheck validation!"; \
-	else \
-		echo "Warning: shellcheck not found. Install it for validation."; \
-		echo "  Debian/Ubuntu: sudo apt-get install shellcheck"; \
+	install -d $(DESTDIR)$(BINDIR)
+	install -m 755 md2ansi $(DESTDIR)$(BINDIR)/md2ansi
+	install -m 755 md $(DESTDIR)$(BINDIR)/md
+	install -m 755 display-ansi-palette $(DESTDIR)$(BINDIR)/display-ansi-palette
+	install -m 755 md-link-extract $(DESTDIR)$(BINDIR)/md-link-extract
+	install -m 755 mdview $(DESTDIR)$(BINDIR)/mdview
+	install -d $(DESTDIR)$(MANDIR)
+	install -m 644 md2ansi.1 $(DESTDIR)$(MANDIR)/md2ansi.1
+	@if [ -d $(DESTDIR)$(COMPDIR) ]; then \
+	  install -m 644 md2ansi.bash_completion $(DESTDIR)$(COMPDIR)/md2ansi; \
 	fi
-	@echo ""
-	@echo "Running test suite..."
-	@test/run_tests
+	install -d $(DESTDIR)$(DATADIR)/themes
+	install -m 644 mdview.conf $(DESTDIR)$(DATADIR)/
+	@if ls themes/*.css >/dev/null 2>&1; then \
+	  install -m 644 themes/*.css $(DESTDIR)$(DATADIR)/themes/; \
+	fi
+	@if ls themes/*.theme >/dev/null 2>&1; then \
+	  install -m 644 themes/*.theme $(DESTDIR)$(DATADIR)/themes/; \
+	fi
+	@if [ -z "$(DESTDIR)" ]; then $(MAKE) --no-print-directory check; fi
 
-# Clean temporary files
+uninstall:
+	rm -f $(DESTDIR)$(BINDIR)/md2ansi
+	rm -f $(DESTDIR)$(BINDIR)/md
+	rm -f $(DESTDIR)$(BINDIR)/display-ansi-palette
+	rm -f $(DESTDIR)$(BINDIR)/md-link-extract
+	rm -f $(DESTDIR)$(BINDIR)/mdview
+	rm -f $(DESTDIR)$(MANDIR)/md2ansi.1
+	rm -f $(DESTDIR)$(COMPDIR)/md2ansi
+	rm -rf $(DESTDIR)$(DATADIR)
+
+check:
+	@command -v md2ansi >/dev/null 2>&1 \
+	  && echo 'md2ansi: OK' \
+	  || echo 'md2ansi: NOT FOUND (check PATH)'
+	@command -v mdview >/dev/null 2>&1 \
+	  && echo 'mdview: OK' \
+	  || echo 'mdview: NOT FOUND (check PATH)'
+
+test:
+	test/run_tests
+
 clean:
-	@echo "Cleaning temporary files..."
-	$(RM_F) *~ *.bak *.tmp
-	$(RM_F) test/*~ test/*.bak
-	@echo "Clean complete!"
+	rm -f *~ *.bak *.tmp
 
-# Show help
-help: all
+help:
+	@echo 'Usage: make [target]'
+	@echo ''
+	@echo 'Targets:'
+	@echo '  install     Install to $(PREFIX)'
+	@echo '  uninstall   Remove installed files'
+	@echo '  check       Verify installation'
+	@echo '  test        Run test suite'
+	@echo '  clean       Remove temporary files'
+	@echo '  help        Show this message'
+	@echo ''
+	@echo 'Install from GitHub:'
+	@echo '  git clone https://github.com/Open-Technology-Foundation/md2ansi.bash.git'
+	@echo '  cd md2ansi.bash && sudo make install'
