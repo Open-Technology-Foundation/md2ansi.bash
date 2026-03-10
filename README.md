@@ -81,35 +81,7 @@ make clean         # Remove temporary files
 make help          # Show help message
 ```
 
-#### Method 2: Using Interactive Install Script
-
-The `install.sh` script provides an interactive installation experience:
-
-```bash
-# Interactive installation (prompts for location)
-./install.sh
-
-# System-wide installation
-./install.sh --system
-
-# User-local installation
-./install.sh --user
-
-# Custom prefix
-./install.sh --prefix /opt/md2ansi
-
-# Non-interactive mode
-./install.sh --system --yes
-```
-
-**Features:**
-- ✓ Interactive prompts for installation type
-- ✓ Automatic sudo elevation when needed
-- ✓ Rollback on installation failure
-- ✓ Shellcheck validation (if available)
-- ✓ Clear post-installation instructions
-
-#### Method 3: Manual Installation
+#### Method 2: Manual Installation
 
 For complete control over the installation:
 
@@ -673,7 +645,6 @@ md2ansi.bash/
 ├── md2ansi.1             # Man page
 ├── md2ansi.bash_completion # Bash completion
 ├── Makefile              # Build/install targets
-├── install.sh            # Interactive installer
 ├── LICENSE               # GPL-3.0 license
 ├── README.md             # This file
 └── test/
