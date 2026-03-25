@@ -17,7 +17,7 @@ mdview() {
     local -- _save_browser=${MDVIEW_BROWSER:-}
 
     # Defaults
-    MDVIEW_THEME=github-dark
+    MDVIEW_THEME=${MDVIEW_THEME:-github-dark}
     MDVIEW_WINDOW_SIZE=960x1080
     MDVIEW_BROWSER=
 
@@ -90,7 +90,7 @@ mdview() {
   local -- pandoc
   pandoc=$(command -v pandoc) || { _error 'pandoc not found'; return 18; }
 
-  "$pandoc" "$file" -s --from=gfm --to=html --ascii \
+  "$pandoc" "$file" -s --from=gfm --to=html --ascii --embed-resources \
     --css="$_MDVIEW_CSS" \
     --highlight-style="$_MDVIEW_THEME" \
     --metadata title="${file##*/}" \
