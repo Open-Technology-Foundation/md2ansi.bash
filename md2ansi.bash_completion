@@ -156,8 +156,8 @@ _mdview_completion() {
   # Complete option flags when current word starts with dash
   if [[ $cur == -* ]]; then
     local -a opts=(
-      '-t' '-s' '-b' '-h' '-V'
-      '--theme' '--window-size' '--browser' '--help' '--version'
+      '-t' '-s' '-b' '-p' '-h' '-V'
+      '--theme' '--window-size' '--browser' '--preserve-tmp' '--help' '--version'
     )
     COMPREPLY=($(compgen -W "${opts[*]}" -- "$cur"))
     return 0

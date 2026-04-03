@@ -26,6 +26,7 @@ install:
 	fi
 	install -d $(DESTDIR)$(DATADIR)/themes
 	install -m 644 mdview.conf $(DESTDIR)$(DATADIR)/
+	install -m 644 rewrite-md-links.lua $(DESTDIR)$(DATADIR)/
 	@if ls themes/*.css >/dev/null 2>&1; then \
 	  install -m 644 themes/*.css $(DESTDIR)$(DATADIR)/themes/; \
 	fi

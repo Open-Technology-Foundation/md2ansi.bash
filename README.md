@@ -312,11 +312,13 @@ mdview --browser /usr/bin/firefox doc.md  # Override browser
 **Requires:** `pandoc` (the only external dependency in the project)
 
 **Features:**
+- Recursive inter-file link resolution (`.md` links rewritten to `.html`)
+- [← Back] navigation links on child pages
 - Automatic browser detection (Google Chrome, Chromium, or xdg-open fallback)
 - Configurable themes via CSS + highlight-style pairs
 - XDG-compliant configuration hierarchy
 - Safe for sourcing as a Bash library (`source mdview`)
-- Automatic temp file cleanup (30-second delayed removal)
+- Scaled temp file cleanup (30s base + 2s per converted file; or `--preserve-tmp`)
 - `--app` mode for Chrome/Chromium (clean window without browser chrome)
 
 **Configuration:**
@@ -337,6 +339,7 @@ Each theme requires two files: `<name>.css` (page styling) and `<name>.theme` (p
 | `-t, --theme NAME` | Theme name | `github-dark` |
 | `-s, --window-size WxH` | Browser window dimensions | `960x1080` |
 | `-b, --browser PATH` | Browser executable | auto-detect |
+| `-p, --preserve-tmp` | Keep session directory and print its path | |
 | `-V, --version` | Show version | |
 | `-h, --help` | Show help | |
 
@@ -614,7 +617,7 @@ diff <(md2ansi version1.md) <(md2ansi version2.md)
 
 ### Design Philosophy
 
-md2ansi follows a **monolithic single-file design** for maximum portability and zero installation friction. All core functionality is embedded in one executable file (`md2ansi`, 1,434 lines) with no external libraries or modules. The `mdview` browser preview utility (218 lines) is a separate companion script.
+md2ansi follows a **monolithic single-file design** for maximum portability and zero installation friction. All core functionality is embedded in one executable file (`md2ansi`, 1,434 lines) with no external libraries or modules. The `mdview` browser preview utility (296 lines) is a separate companion script.
 
 **Design Benefits:**
 
@@ -637,11 +640,14 @@ md2ansi.bash/
 ├── md                    # Pagination wrapper (15 lines)
 ├── display-ansi-palette  # Color palette viewer (72 lines)
 ├── md-link-extract       # Link extractor (54 lines)
-├── mdview                # Browser-based markdown preview (218 lines)
+├── mdview                # Browser-based markdown preview (296 lines)
 ├── mdview.conf           # Default mdview configuration
+├── rewrite-md-links.lua  # Pandoc Lua filter: .md → .html link rewriting
 ├── themes/               # mdview theme files
-│   ├── github-dark.css   # Page styling
-│   └── github-dark.theme # Pandoc syntax highlight style
+│   ├── github-dark.css   # Page styling (dark theme)
+│   ├── github-dark.theme # Pandoc syntax highlight style (dark)
+│   ├── github-light.css  # Page styling (light theme)
+│   └── github-light.theme # Pandoc syntax highlight style (light)
 ├── md2ansi.1             # Man page
 ├── md2ansi.bash_completion # Bash completion
 ├── Makefile              # Build/install targets
@@ -663,9 +669,9 @@ md2ansi.bash/
 
 **Total Project Size:**
 - Main executable: 1,434 lines
-- Utility scripts: 359 lines
+- Utility scripts: 437 lines
 - Test suite: 1,630 lines
-- **Total: 3,423 lines**
+- **Total: 3,501 lines**
 
 ### Internal Code Organization
 
@@ -1167,7 +1173,7 @@ See [LICENSE](LICENSE) file for full text.
 | **md2ansi Lines** | 1,434 lines (42KB) |
 | **Total Scripts** | 5 main + 1 test runner + 10 test files |
 | **Test Coverage** | 1,630 lines across 10 test files |
-| **Total Project** | 3,423 lines |
+| **Total Project** | 3,501 lines |
 | **Features** | 15+ markdown elements |
 | **Dependencies** | 0 (zero) |
 | **Installation** | Single file copy (md2ansi); mdview adds themes |

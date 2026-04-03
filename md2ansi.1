@@ -348,8 +348,11 @@ Utility to extract and list all URLs from markdown files
 .I mdview
 Browser-based Markdown preview utility. Converts Markdown to styled HTML via
 .BR pandoc (1)
-and opens it in a browser window. Supports configurable themes,
-XDG-compliant configuration, and automatic temp file cleanup. Requires
+and opens it in a browser window. Recursively converts linked .md files with
+inter-file link rewriting and [Back] navigation on child pages. Supports
+configurable themes, XDG-compliant configuration, and scaled temp file cleanup
+(30s base + 2s per converted file). Use \-p/\-\-preserve\-tmp to keep the
+session directory and print its path. Requires
 .B pandoc
 to be installed.
 .TP
@@ -388,6 +391,10 @@ Browser window dimensions as WIDTHxHEIGHT (default: 960x1080). Overridden by
 .B MDVIEW_BROWSER
 Browser executable path. If unset, mdview auto-detects: google-chrome,
 chromium-browser, chromium, then xdg-open. Overridden by \-b/\-\-browser.
+.TP
+.B MDVIEW_PRESERVE_TMP
+If set, mdview skips session directory cleanup and prints the session path to
+stdout. Overridden by \-p/\-\-preserve\-tmp.
 .TP
 .B XDG_CONFIG_HOME
 Base directory for user configuration files (default: ~/.config). mdview reads

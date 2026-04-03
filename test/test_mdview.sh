@@ -107,9 +107,9 @@ if command -v pandoc &>/dev/null && [[ -d themes ]]; then
   # Full pipeline succeeds with mock browser
   assert_exit_code 0 "MDVIEW_BROWSER=/bin/true ./mdview README.md" "Full pipeline with mock browser exits 0"
 
-  # Temp file created in expected directory
+  # Temp file created in per-session directory
   if [[ -d "$MDVIEW_TMPDIR" ]]; then
-    tmpcount=$(find "$MDVIEW_TMPDIR" -name 'README.*.html' -mmin -1 2>/dev/null | wc -l)
+    tmpcount=$(find "$MDVIEW_TMPDIR" -name 'README.html' -mmin -1 2>/dev/null | wc -l)
     if ((tmpcount > 0)); then
       assert_pass "Temp HTML file created in $MDVIEW_TMPDIR"
     else
@@ -120,7 +120,7 @@ if command -v pandoc &>/dev/null && [[ -d themes ]]; then
   fi
 
   # Temp file contains HTML (spot check)
-  tmpfile=$(find "$MDVIEW_TMPDIR" -name 'README.*.html' -mmin -1 2>/dev/null | head -1)
+  tmpfile=$(find "$MDVIEW_TMPDIR" -name 'README.html' -mmin -1 2>/dev/null | head -1)
   if [[ -n "$tmpfile" && -f "$tmpfile" ]]; then
     content=$(head -5 "$tmpfile")
     assert_contains "$content" "html" "Temp file contains HTML content"
@@ -163,8 +163,8 @@ if command -v pandoc &>/dev/null && [[ -d themes ]]; then
   ' 2>&1)
   assert_equals "" "$output" "No EXIT trap after full sourced pipeline (fix #1 verified)"
 
-  # Clean up any test temp files (don't wait for the 30s delayed cleanup)
-  find "$MDVIEW_TMPDIR" -name 'README.*.html' -mmin -1 -delete 2>/dev/null ||:
+  # Clean up test session directories (don't wait for the 30s delayed cleanup)
+  find "$MDVIEW_TMPDIR" -maxdepth 1 -name 'session.*' -type d -mmin -1 -exec rm -rf {} + 2>/dev/null ||:
 
 else
   echo "${YELLOW}⊘${NC} Skipping full pipeline tests (pandoc or themes/ not available)"
