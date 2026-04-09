@@ -339,7 +339,7 @@ Each theme requires two files: `<name>.css` (page styling) and `<name>.theme` (p
 | `-t, --theme NAME` | Theme name | `github-dark` |
 | `-s, --window-size WxH` | Browser window dimensions | `960x1080` |
 | `-b, --browser PATH` | Browser executable | auto-detect |
-| `-p, --preserve-tmp` | Keep session directory and print its path | |
+| `-P, --preserve-tmp` | Keep session directory and print its path | |
 | `-V, --version` | Show version | |
 | `-h, --help` | Show help | |
 

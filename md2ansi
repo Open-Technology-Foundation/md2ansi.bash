@@ -4,11 +4,12 @@
 set -euo pipefail
 shopt -s inherit_errexit shift_verbose extglob nullglob
 
-export PATH=/usr/local/bin:/usr/bin:/bin
-export PS4='+ ${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]:+${FUNCNAME[0]}():} '
+declare -rx PATH=/usr/local/bin:/usr/bin:/bin
+declare -rx PS4='+ ${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]:+${FUNCNAME[0]}():} '
 
 # Script metadata
 declare -r VERSION=1.0.1
+#bcscheck disable=BCS0103
 declare -r SCRIPT_NAME=${0##*/}
 
 # Global configuration
@@ -53,32 +54,30 @@ fi
 _msg() {
   local -- prefix="$SCRIPT_NAME:" msg
   case ${FUNCNAME[1]} in
-    warn)    prefix+=" ${YELLOW}▲${NC}" ;;
-    error)   prefix+=" ${RED}✗${NC}" ;;
+    warn)    prefix+=" $YELLOW▲$NC" ;;
+    error)   prefix+=" $RED✗$NC" ;;
     *) ;;
   esac
   for msg in "$@"; do
     printf '%s %s\n' "$prefix" "$msg"
   done
 }
-
 # Unconditional output
 warn()  { >&2 _msg "$@"; }
 error() { >&2 _msg "$@"; }
-
 # Exit with error
 die() { (($# < 2)) || error "${@:2}"; exit "${1:-0}"; }
 
 # Debug output with timestamp
+#bcscheck disable=BCS0703
 debug() {
   ((DEBUG)) || return 0
-  local -- timestamp msg
-  timestamp=$(date +%H:%M:%S.%3N 2>/dev/null || date +%H:%M:%S)
+  local -- msg
   for msg in "$@"; do
-    >&2 printf '[%s] %s⦿%s %s\n' "$timestamp" "$YELLOW" "$NC" "$msg"
+    >&2 printf '[%(%T)T.%s] %s⦿%s %s\n' -1 "$DEBUG" "$YELLOW" "$NC" "$msg"
+    DEBUG+=1
   done
 }
-
 
 # --------------------------------------------------------------------------------
 # Terminal detection functions
@@ -86,7 +85,7 @@ debug() {
 # Get terminal width with multiple fallback methods
 # Returns: width as integer (bounds: 20-500)
 get_terminal_width() {
-  local -i width=80
+  local -i width
 
   # Method 1: tput cols
   width=$(tput cols 2>/dev/null || echo 0)
@@ -128,17 +127,17 @@ validate_file_size() {
   local -i max_size=$2
   local -i file_size
 
-  [[ -f "$filepath" ]] || die 3 "File not found ${filepath@Q}"
-  [[ -r "$filepath" ]] || die 13 "Cannot read file ${filepath@Q}"
+  [[ -f $filepath ]] || die 3 "File not found ${filepath@Q}"
+  [[ -r $filepath ]] || die 13 "Cannot read file ${filepath@Q}"
 
   # Check if it's a directory
-  [[ ! -d "$filepath" ]] || die 3 "${filepath@Q} is a directory, not a file"
+  [[ ! -d $filepath ]] || die 4 "${filepath@Q} is a directory, not a file"
 
   # Get file size in bytes
   file_size=$(stat -c '%s' "$filepath" 2>/dev/null || echo 0)
 
   if ((file_size > max_size)); then
-    die 1 "File too large: $file_size bytes (maximum: $max_size bytes / 10MB)"
+    die 9 "File too large: $file_size bytes (maximum: $max_size bytes / 10MB)"
   fi
 
   debug "File size validation passed: $file_size bytes"
@@ -156,13 +155,8 @@ cleanup() {
   [[ -z ${ANSI_RESET:-} ]] || printf '%s' "$ANSI_RESET"
   exit "$exitcode"
 }
-
 # Install signal handlers
-install_signal_handlers() {
-  trap 'cleanup $?' EXIT
-  trap 'cleanup 130' INT
-  trap 'cleanup 143' TERM
-}
+trap 'cleanup $?' SIGINT SIGTERM EXIT
 
 # --------------------------------------------------------------------------------
 # Argument validation
@@ -186,14 +180,14 @@ noarg() {
 # 2. Check TERM variable (for piped/non-TTY but colorful terminals)
 # 3. Verify terminal supports 256 colors via tput
 declare -i HAS_COLOR=0
-
 # Check if we have a terminal
+#bcscheck disable=BCS0207
 if [[ -t 1 && -t 2 ]] || [[ -n ${TERM:-} && $TERM != dumb ]]; then
   declare -i color_count
   color_count=$(tput colors 2>/dev/null || echo 0)
   ((color_count < 256)) || HAS_COLOR=1
 fi
-readonly -- HAS_COLOR
+readonly HAS_COLOR
 
 # --------------------------------------------------------------------------------
 # Basic ANSI formatting codes
@@ -283,9 +277,10 @@ sanitize_ansi() {
 # Apply all inline formatting to a line of text
 # Order matters: process code first, then images, links, then bold/italic/strike
 # Usage: colorize_line "markdown text"
+#bcscheck disable=BCS0207
 colorize_line() {
   local -- line=$1
-  local -- result="$line"
+  local -- result=$line
 
   # 1. Inline code: `code` (remove backticks from output)
   result=$(sed -E "s/\`([^\`]+)\`/${COLOR_CODEBLOCK}\1${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
@@ -390,12 +385,12 @@ render_header() {
 
   # Determine color based on header level
   case ${#hashes} in
-    1) color="$COLOR_H1" ;;
-    2) color="$COLOR_H2" ;;
-    3) color="$COLOR_H3" ;;
-    4) color="$COLOR_H4" ;;
-    5) color="$COLOR_H5" ;;
-    *) color="$COLOR_H6" ;;
+    1) color=$COLOR_H1 ;;
+    2) color=$COLOR_H2 ;;
+    3) color=$COLOR_H3 ;;
+    4) color=$COLOR_H4 ;;
+    5) color=$COLOR_H5 ;;
+    *) color=$COLOR_H6 ;;
   esac
 
   # Apply inline formatting to header text
@@ -487,13 +482,13 @@ render_task_item() {
   indent_level=$((${#indent} / 2))
   printf -v bullet_indent '%*s' $((indent_level * 2)) ''
   printf -v text_indent '%*s' $(((indent_level + 1) * 2)) ''
-  text_indent+="     "  # 5 extra for "[ ] "
+  text_indent+='     '  # 5 extra for "[ ] "
 
   # Format checkbox
   if [[ $status == 'x' ]]; then
-    checkbox="${COLOR_LIST}[${ANSI_BOLD}x${ANSI_RESET}${COLOR_LIST}]"
+    checkbox="$COLOR_LIST[${ANSI_BOLD}x$ANSI_RESET$COLOR_LIST]"
   else
-    checkbox="${COLOR_LIST}[ ]"
+    checkbox="$COLOR_LIST[ ]"
   fi
 
   # Apply inline formatting
@@ -587,7 +582,7 @@ render_code_line() {
       output=$(highlight_bash "$code")
       ;;
     *)
-      output="$code"
+      output=$code
       ;;
   esac
 
@@ -614,6 +609,7 @@ highlight_python() {
   # For other lines, use minimal highlighting to avoid ANSI code conflicts
   # Just highlight keywords - keep it simple
   local -- result=$code
+  #bcscheck disable=BCS0207
   result=$(sed -E "s/\\b(def|class|if|elif|else|for|while|return|import|from|print)\\b/${COLOR_KEYWORD}\\1${COLOR_CODEBLOCK}/g" <<<"$result")
 
   echo "$result"
@@ -632,6 +628,7 @@ highlight_javascript() {
 
   # Minimal highlighting - just keywords
   local -- result=$code
+  #bcscheck disable=BCS0207
   result=$(sed -E "s/\\b(function|const|let|var|if|else|for|while|return|class|console)\\b/${COLOR_KEYWORD}\\1${COLOR_CODEBLOCK}/g" <<<"$result")
 
   echo "$result"
@@ -650,6 +647,7 @@ highlight_bash() {
 
   # Minimal highlighting - just keywords and common built-ins
   local -- result=$code
+  #bcscheck disable=BCS0207
   result=$(sed -E "s/\\b(if|then|else|elif|fi|for|while|do|done|echo|printf|local|declare)\\b/${COLOR_KEYWORD}\\1${COLOR_CODEBLOCK}/g" <<<"$result")
 
   echo "$result"
@@ -679,7 +677,7 @@ render_table() {
   # --------------------------------------------------------------------------------
   # Step 1: Collect all consecutive table lines
   while ((_md_idx < ${#_md_lines[@]})); do
-    line="${_md_lines[_md_idx]}"
+    line=${_md_lines[_md_idx]}
     # Check if line starts with | (possibly after spaces)
     [[ $line =~ ^[[:space:]]*\| ]] || break
     table_lines+=("$line")
@@ -747,8 +745,8 @@ _parse_table_structure() {
 
   for line in "${_table_lines[@]}"; do
     # Remove leading/trailing whitespace
-    line="${line#"${line%%[![:space:]]*}"}"
-    line="${line%"${line##*[![:space:]]}"}"
+    line=${line#"${line%%[![:space:]]*}"}
+    line=${line%"${line##*[![:space:]]}"}
 
     # Remove leading and trailing pipes
     line=${line#|}
@@ -759,10 +757,10 @@ _parse_table_structure() {
 
     # Trim whitespace from each cell
     for ((i=0; i<${#cells[@]}; i+=1)); do
-      cell="${cells[i]}"
-      cell="${cell#"${cell%%[![:space:]]*}"}"
-      cell="${cell%"${cell##*[![:space:]]}"}"
-      cells[i]="$cell"
+      cell=${cells[i]}
+      cell=${cell#"${cell%%[![:space:]]*}"}
+      cell=${cell%"${cell##*[![:space:]]}"}
+      cells[i]=$cell
     done
 
     # Check if this is an alignment row (row 2, all cells match :?-+:?)
@@ -891,14 +889,14 @@ _render_table_output() {
 
     # Print each cell
     for ((i=0; i<_col_count; i+=1)); do
-      cell_text="${cells[i]}"
+      cell_text=${cells[i]}
 
       # Apply inline formatting
       cell_text=$(colorize_line "$cell_text")
 
       # Replace COLOR_TEXT with COLOR_TABLE so text after inline formatting
       # resets to table color instead of terminal default
-      cell_text="${cell_text//$COLOR_TEXT/$COLOR_TABLE}"
+      cell_text=${cell_text//$COLOR_TEXT/$COLOR_TABLE}
 
       # Align cell
       width=${_col_widths[i]}
@@ -967,6 +965,36 @@ _align_cell() {
 
 # --------------------------------------------------------------------------------
 # Main markdown parser
+# --------------------------------------------------------------------------------
+# Footnote rendering
+
+# Render collected footnotes at end of document
+render_footnotes() {
+  local -- ref_id footnote_text formatted_text
+
+  echo
+  printf '%s%s%s\n' "$COLOR_H2" 'Footnotes:' "$ANSI_RESET"
+  echo
+
+  for ref_id in "${FOOTNOTE_REFS[@]}"; do
+    if [[ -n ${FOOTNOTES[$ref_id]:-} ]]; then
+      footnote_text=${FOOTNOTES[$ref_id]}
+      formatted_text=$(colorize_line "$footnote_text")
+      printf '%s[%s%s^%s%s%s]: %s%s\n' \
+        "$COLOR_TEXT" \
+        "$ANSI_BOLD" "$ANSI_DIM" "$ref_id" "$ANSI_RESET" "$COLOR_TEXT" \
+        "$formatted_text" \
+        "$ANSI_RESET"
+    else
+      # Reference without definition
+      printf '%s[%s%s^%s%s%s]: %sMissing footnote definition%s\n' \
+        "$COLOR_TEXT" \
+        "$ANSI_BOLD" "$ANSI_DIM" "$ref_id" "$ANSI_RESET" "$COLOR_TEXT" \
+        "$ANSI_ITALIC" \
+        "$ANSI_RESET"
+    fi
+  done
+}
 
 # Parse markdown line array and produce ANSI output
 # Usage: parse_markdown lines_array_name
@@ -990,11 +1018,11 @@ parse_markdown() {
   local -- ref_id ref_match
   local -a wrapped
   while ((i < ${#_lines[@]})); do
-    line="${_lines[i]}"
-    original_line="$line"
+    line=${_lines[i]}
+    original_line=$line
 
     # Trim trailing whitespace
-    line="${line%"${line##*[![:space:]]}"}"
+    line=${line%"${line##*[![:space:]]}"}
 
     # --------------------------------------------------------------------------------
     # CODE BLOCKS - Fenced (``` or ~~~)
@@ -1062,7 +1090,7 @@ parse_markdown() {
     # --------------------------------------------------------------------------------
     # BLOCKQUOTES: Lines starting with >
     if [[ $line =~ ^[[:space:]]*\>[[:space:]]?(.*)$ ]]; then
-      quote_content="${BASH_REMATCH[1]}"
+      quote_content=${BASH_REMATCH[1]}
       render_blockquote "$quote_content" "$TERM_WIDTH"
       i+=1
       continue
@@ -1071,8 +1099,8 @@ parse_markdown() {
     # --------------------------------------------------------------------------------
     # HEADERS: # through ######
     if [[ $line =~ ^(#{1,6})[[:space:]]+(.+)$ ]]; then
-      hashes="${BASH_REMATCH[1]}"
-      header_text="${BASH_REMATCH[2]}"
+      hashes=${BASH_REMATCH[1]}
+      header_text=${BASH_REMATCH[2]}
       render_header "$hashes" "$header_text"
       i+=1
       continue
@@ -1081,9 +1109,9 @@ parse_markdown() {
     # --------------------------------------------------------------------------------
     # TASK LISTS: - [ ] or - [x]
     if [[ $line =~ ^([[:space:]]*)[-*][[:space:]]+\[([[:space:]x])\][[:space:]]+(.+)$ ]]; then
-      indent="${BASH_REMATCH[1]}"
-      status="${BASH_REMATCH[2]}"
-      task_content="${BASH_REMATCH[3]}"
+      indent=${BASH_REMATCH[1]}
+      status=${BASH_REMATCH[2]}
+      task_content=${BASH_REMATCH[3]}
 
       if ((OPTIONS[task_lists])); then
         render_task_item "$indent" "$status" "$task_content" "$TERM_WIDTH"
@@ -1098,8 +1126,8 @@ parse_markdown() {
     # --------------------------------------------------------------------------------
     # UNORDERED LISTS: - or *
     if [[ $line =~ ^([[:space:]]*)[-*][[:space:]]+(.+)$ ]]; then
-      indent="${BASH_REMATCH[1]}"
-      list_content="${BASH_REMATCH[2]}"
+      indent=${BASH_REMATCH[1]}
+      list_content=${BASH_REMATCH[2]}
       render_list_item "$indent" "$list_content" "$TERM_WIDTH"
       i+=1
       continue
@@ -1108,9 +1136,9 @@ parse_markdown() {
     # --------------------------------------------------------------------------------
     # ORDERED LISTS: 1. 2. etc.
     if [[ $line =~ ^([[:space:]]*)([0-9]+)\.[[:space:]]+(.+)$ ]]; then
-      indent="${BASH_REMATCH[1]}"
-      number="${BASH_REMATCH[2]}"
-      list_content="${BASH_REMATCH[3]}"
+      indent=${BASH_REMATCH[1]}
+      number=${BASH_REMATCH[2]}
+      list_content=${BASH_REMATCH[3]}
       render_ordered_item "$indent" "$number" "$list_content" "$TERM_WIDTH"
       i+=1
       continue
@@ -1119,11 +1147,11 @@ parse_markdown() {
     # --------------------------------------------------------------------------------
     # FOOTNOTE DEFINITIONS: [^id]: text
     if [[ $line =~ ^\[\^([^]]+)\]:[[:space:]]+(.+)$ ]] && ((OPTIONS[footnotes])); then
-      footnote_id="${BASH_REMATCH[1]}"
-      footnote_text="${BASH_REMATCH[2]}"
+      footnote_id=${BASH_REMATCH[1]}
+      footnote_text=${BASH_REMATCH[2]}
 
       # Store footnote
-      FOOTNOTES[$footnote_id]="$footnote_text"
+      FOOTNOTES[$footnote_id]=$footnote_text
 
       # Track reference order
       if [[ " ${FOOTNOTE_REFS[*]} " != *" ${footnote_id} "* ]]; then
@@ -1149,15 +1177,15 @@ parse_markdown() {
     # Find and track footnote references in text
     if ((OPTIONS[footnotes])); then
       while [[ $line =~ \[\^([^]]+)\] ]]; do
-        ref_id="${BASH_REMATCH[1]}"
-        ref_match="${BASH_REMATCH[0]}"
+        ref_id=${BASH_REMATCH[1]}
+        ref_match=${BASH_REMATCH[0]}
         if [[ " ${FOOTNOTE_REFS[*]} " != *" ${ref_id} "* ]]; then
           FOOTNOTE_REFS+=("$ref_id")
         fi
         # Remove matched part to find next
         line=${line/${ref_match}/}
       done
-      line="$original_line"  # Restore for colorization
+      line=$original_line  # Restore for colorization
     fi
 
     formatted_line=$(colorize_line "$line")
@@ -1174,43 +1202,12 @@ parse_markdown() {
   fi
 }
 
-# --------------------------------------------------------------------------------
-# Footnote rendering
-
-# Render collected footnotes at end of document
-render_footnotes() {
-  local -- ref_id footnote_text formatted_text
-
-  echo
-  printf '%s%s%s\n' "$COLOR_H2" "Footnotes:" "$ANSI_RESET"
-  echo
-
-  for ref_id in "${FOOTNOTE_REFS[@]}"; do
-    if [[ -n ${FOOTNOTES[$ref_id]:-} ]]; then
-      footnote_text=${FOOTNOTES[$ref_id]}
-      formatted_text=$(colorize_line "$footnote_text")
-      printf '%s[%s%s^%s%s%s]: %s%s\n' \
-        "$COLOR_TEXT" \
-        "$ANSI_BOLD" "$ANSI_DIM" "$ref_id" "$ANSI_RESET" "$COLOR_TEXT" \
-        "$formatted_text" \
-        "$ANSI_RESET"
-    else
-      # Reference without definition
-      printf '%s[%s%s^%s%s%s]: %sMissing footnote definition%s\n' \
-        "$COLOR_TEXT" \
-        "$ANSI_BOLD" "$ANSI_DIM" "$ref_id" "$ANSI_RESET" "$COLOR_TEXT" \
-        "${ANSI_ITALIC}" \
-        "$ANSI_RESET"
-    fi
-  done
-}
-
 # ================================================================================
 # Main Script Functions
 # ================================================================================
 
 # Usage documentation
-usage() {
+show_help() {
   cat <<HELP
 $SCRIPT_NAME $VERSION - Convert Markdown to ANSI-colored terminal output
 
@@ -1266,7 +1263,7 @@ HELP
 }
 
 # Argument parsing
-
+#bcscheck disable=BCS0804
 parse_arguments() {
   while (($#)); do
     case $1 in
@@ -1275,7 +1272,7 @@ parse_arguments() {
         shift
         [[ $1 =~ ^[0-9]+$ ]] || die 22 "Invalid width ${1@Q}"
         TERM_WIDTH=$1
-        ((TERM_WIDTH >= 20 && TERM_WIDTH <= 500)) || die 22 "Width must be between 20 and 500"
+        ((TERM_WIDTH >= 20 && TERM_WIDTH <= 500)) || die 22 'Width must be between 20 and 500'
         ;;
       -D|--debug)
         DEBUG=1
@@ -1285,7 +1282,7 @@ parse_arguments() {
         exit 0
         ;;
       -h|--help)
-        usage
+        show_help
         exit 0
         ;;
       -t|--plain)
@@ -1315,6 +1312,7 @@ parse_arguments() {
       --no-links)
         OPTIONS[links]=0
         ;;
+
       --)
         shift
         (($#==0)) || INPUT_FILES+=("$@")
@@ -1345,15 +1343,15 @@ process_file() {
   local -a lines=()
   local -- line
 
-  if [[ -n "$filepath" ]]; then
+  if [[ -n $filepath ]]; then
     # Process file
     debug "Processing file ${filepath@Q}"
     validate_file_size "$filepath" "$MAX_FILE_SIZE"
 
     # Read file into array, handling encoding issues
-    while IFS= read -r line || [[ -n "$line" ]]; do
+    while IFS= read -r line || [[ -n $line ]]; do
       # Skip shebang to prevent treating it as markdown content
-      if ((${#lines[@]} == 0)) && [[ "$line" =~ ^\#! ]]; then
+      if ((${#lines[@]} == 0)) && [[ $line =~ ^\#! ]]; then
         continue
       fi
       lines+=("$line")
@@ -1364,16 +1362,16 @@ process_file() {
     local -i byte_count=0
 
     # Read stdin with size limit
-    while IFS= read -r line || [[ -n "$line" ]]; do
+    while IFS= read -r line || [[ -n $line ]]; do
       byte_count+=${#line}
       byte_count+=1  # Account for newline
 
       if ((byte_count > MAX_FILE_SIZE)); then
-        die 1 "Input from stdin exceeds maximum size: $MAX_FILE_SIZE bytes (10MB)"
+        die 9 "Input from stdin exceeds maximum size: $MAX_FILE_SIZE bytes (10MB)"
       fi
 
       # Skip shebang to prevent treating it as markdown content
-      if ((${#lines[@]} == 0)) && [[ "$line" =~ ^\#! ]]; then
+      if ((${#lines[@]} == 0)) && [[ $line =~ ^\#! ]]; then
         continue
       fi
       lines+=("$line")
@@ -1389,15 +1387,13 @@ process_file() {
 # Main function
 
 main() {
-  install_signal_handlers
-
   # Parse command-line arguments
   parse_arguments "$@"
 
   # Determine terminal width
   ((TERM_WIDTH)) || TERM_WIDTH=$(get_terminal_width)
 
-  readonly -- DEBUG TERM_WIDTH
+  readonly TERM_WIDTH
   readonly -A OPTIONS
   readonly -a INPUT_FILES
 
