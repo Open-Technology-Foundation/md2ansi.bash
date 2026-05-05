@@ -16,7 +16,7 @@ install:
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 755 md2ansi $(DESTDIR)$(BINDIR)/md2ansi
 	install -m 755 md $(DESTDIR)$(BINDIR)/md
-	install -m 755 display-ansi-palette $(DESTDIR)$(BINDIR)/display-ansi-palette
+	install -m 755 ansi-info $(DESTDIR)$(BINDIR)/ansi-info
 	install -m 755 md-link-extract $(DESTDIR)$(BINDIR)/md-link-extract
 	install -m 755 mdview $(DESTDIR)$(BINDIR)/mdview
 	install -d $(DESTDIR)$(MANDIR)
@@ -38,7 +38,7 @@ install:
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/md2ansi
 	rm -f $(DESTDIR)$(BINDIR)/md
-	rm -f $(DESTDIR)$(BINDIR)/display-ansi-palette
+	rm -f $(DESTDIR)$(BINDIR)/ansi-info
 	rm -f $(DESTDIR)$(BINDIR)/md-link-extract
 	rm -f $(DESTDIR)$(BINDIR)/mdview
 	rm -f $(DESTDIR)$(MANDIR)/md2ansi.1
