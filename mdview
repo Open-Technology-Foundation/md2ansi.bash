@@ -1,4 +1,5 @@
 #!/usr/bin/bash
+#shellcheck disable=SC2015
 #bcscheck disable=BCS0108
 # mdview — Markdown viewer using pandoc with configurable theme + syntax highlighting
 

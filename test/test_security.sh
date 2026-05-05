@@ -17,7 +17,7 @@ rm -f /tmp/md2ansi_large.txt
 
 # Create a file exceeding the limit (11MB)
 dd if=/dev/zero bs=1024 count=11264 2>/dev/null | tr '\0' 'a' > /tmp/md2ansi_toolarge.txt
-assert_exit_code 1 "./md2ansi /tmp/md2ansi_toolarge.txt 2>&1" "File exceeding 10MB limit returns error"
+assert_exit_code 9 "./md2ansi /tmp/md2ansi_toolarge.txt 2>&1" "File exceeding 10MB limit returns error"
 rm -f /tmp/md2ansi_toolarge.txt
 
 # --------------------------------------------------------------------------------
@@ -30,9 +30,10 @@ assert_not_empty "$output" "Long line (50KB) processes"
 
 # Create an extremely long line (150KB - should be truncated/handled)
 very_long_line=$(printf 'a%.0s' {1..153600})
-output=$(echo "$very_long_line" | ./md2ansi 2>&1)
+rc=0
+output=$(echo "$very_long_line" | ./md2ansi 2>&1) || rc=$?
 # Should either process or handle gracefully
-if [ $? -eq 0 ] || [ $? -eq 1 ]; then
+if (( rc == 0 || rc == 1 )); then
   assert_pass "Very long line (150KB) handled gracefully"
 else
   assert_fail "Very long line should be handled"
@@ -52,6 +53,7 @@ output=$(echo -e "\x1b[2J\x1b[H# Header" | ./md2ansi)
 assert_contains "$output" "Header" "Malicious ANSI codes (clear screen) handled"
 
 # ANSI codes in code blocks should be preserved/handled correctly
+#shellcheck disable=SC2016  # echo -e interprets \n and \x1b, not bash
 output=$(echo -e '```\necho -e "\x1b[31mred\x1b[0m"\n```' | ./md2ansi)
 assert_contains "$output" "echo" "ANSI codes in code blocks handled"
 
@@ -71,7 +73,7 @@ output=$(echo "********************test********************" | ./md2ansi 2>&1)
 assert_contains "$output" "test" "Many consecutive asterisks handled"
 
 # Very long link URL that could cause regex issues
-long_url=$(printf 'http://example.com/%s' $(printf 'a%.0s' {1..1000}))
+long_url=$(printf 'http://example.com/%s' "$(printf 'a%.0s' {1..1000})")
 output=$(echo "[link]($long_url)" | ./md2ansi 2>&1)
 assert_contains "$output" "link" "Very long URL handled"
 

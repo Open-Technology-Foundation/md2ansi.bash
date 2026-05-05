@@ -77,13 +77,13 @@ assert_exit_code 22 "echo test | ./md2ansi -Dz 2>&1" "Invalid combined option -D
 output=$(dd if=/dev/zero bs=1024 count=1000 2>/dev/null | tr '\0' 'x' | ./md2ansi 2>&1)
 assert_not_empty "$output" "Stdin under 10MB (1MB) processes successfully"
 
-# Stdin over 10MB rejected with exit code 1
+# Stdin over 10MB rejected with exit code 9 (die 9 in process_file)
 # Generate just over 10MB (10.5MB) piped to stdin
 set +e
 dd if=/dev/zero bs=1024 count=10752 2>/dev/null | tr '\0' 'x' | ./md2ansi >/dev/null 2>/tmp/md2ansi_stderr_limit.txt
 stdin_exit=$?
 set -e
-assert_equals "1" "$stdin_exit" "Stdin over 10MB returns exit code 1"
+assert_equals "9" "$stdin_exit" "Stdin over 10MB returns exit code 9"
 
 # Error message mentions stdin and maximum size
 stderr_msg=$(</tmp/md2ansi_stderr_limit.txt)

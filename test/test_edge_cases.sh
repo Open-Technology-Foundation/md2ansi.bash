@@ -31,6 +31,7 @@ output=$(echo -e "\`\`\`\n\`\`\`" | ./md2ansi)
 assert_exit_code 0 "echo -e '\`\`\`\\n\`\`\`' | ./md2ansi" "Empty code block succeeds"
 
 # Code block at end without trailing newline
+#shellcheck disable=SC2016  # printf interprets \n, not bash
 printf '```\ncode\n```' | ./md2ansi >/dev/null
 assert_exit_code 0 "printf '\`\`\`\\ncode\\n\`\`\`' | ./md2ansi >/dev/null" "Code block without trailing newline"
 
@@ -140,7 +141,7 @@ output=$(echo "[link]()" | ./md2ansi)
 assert_contains "$output" "link" "Link with empty URL renders text"
 
 # Link with very long URL (500 chars)
-long_url=$(printf 'http://example.com/%s' $(printf 'a%.0s' {1..500}))
+long_url=$(printf 'http://example.com/%s' "$(printf 'a%.0s' {1..500})")
 output=$(echo "[link]($long_url)" | ./md2ansi)
 assert_contains "$output" "link" "Link with very long URL handled"
 
