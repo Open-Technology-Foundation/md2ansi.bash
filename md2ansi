@@ -50,25 +50,14 @@ fi
 # --------------------------------------------------------------------------------
 # Core messaging functions
 
-# Internal message function using FUNCNAME for context
-_msg() {
-  local -- prefix="$SCRIPT_NAME:" msg
-  case ${FUNCNAME[1]} in
-    warn)    prefix+=" $YELLOW▲$NC" ;;
-    error)   prefix+=" $RED✗$NC" ;;
-    *) ;;
-  esac
-  for msg in "$@"; do
-    printf '%s %s\n' "$prefix" "$msg"
-  done
-}
-# Unconditional output
-warn()  { >&2 _msg "$@"; }
-error() { >&2 _msg "$@"; }
-# Exit with error
-die() { (($# < 2)) || error "${@:2}"; exit "${1:-0}"; }
+# Internal message functions
+_msg() { >&2 printf "$SCRIPT_NAME: $1 %s\n" "${@:2}"; }
+warn() { _msg "$YELLOW▲$NC" "$@"; }
+error() { _msg "$RED✗$NC" "$@"; }
+die() { error "${@:2}"; exit "$1"; }
 
 # Debug output with timestamp
+# NOTE: int DEBUG is incremented every time this function is called
 #bcscheck disable=BCS0703
 debug() {
   ((DEBUG)) || return 0
