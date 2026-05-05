@@ -670,6 +670,7 @@ render_table() {
     # Check if line starts with | (possibly after spaces)
     [[ $line =~ ^[[:space:]]*\| ]] || break
     table_lines+=("$line")
+    # shellcheck disable=SC2324  # nameref to declare -i; BCS requires standalone var+=1
     _md_idx+=1
   done
 
