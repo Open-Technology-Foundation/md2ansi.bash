@@ -227,6 +227,11 @@ display_truecolor() {
   printf '\e[0m\n'
 }
 
+# Renders the final two report sections together:
+#   1. Standard 16 named codes (with their xterm names: black, red, …, brwhite)
+#   2. Terminal capability footer (TERM, COLORTERM, tput colors, truecolor)
+# The truecolor flag is inferred from COLORTERM only — terminals that support
+# truecolor without setting COLORTERM will be reported as 'no'.
 display_terminal_info() {
   local -i tput_cols i
   local -- truecolor='no'
@@ -251,6 +256,10 @@ display_terminal_info() {
   printf '  Truecolor   = %s\n' "$truecolor"
 }
 
+# Top-level orchestrator: emits the four report sections in order
+# (palette, SGR attributes, truecolor ramps, named codes + terminal info).
+# Section helpers print their own headings; this function only adds the
+# overall title and inter-section spacing.
 display_ansi_palette() {
   printf '\e[0m\e[3;32m%s\e[0m\n\n' 'ANSI 256-colour palette'
   display_block_standard16
@@ -275,7 +284,10 @@ main() {
         exit 0
         ;;
       -[hV]*)
-        # Split bundled short options (e.g. -hV)
+        # Split a contiguous bundle of short options (e.g. -hV, -Vh) into
+        # separate -h / -V tokens. Only -h and -V are valid here, so the
+        # bundle is always exactly two characters; the loop iterates again
+        # against the freshly-prepended single-letter options.
         local -- bundle=${1#-}
         shift
         set -- "-${bundle:0:1}" "-${bundle:1}" "$@"

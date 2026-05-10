@@ -248,26 +248,23 @@ declare -- file=
 while (($#)); do
   case $1 in
     -t|--theme)
-      noarg "$@"
-      shift
+      noarg "$@"; shift
       export MDVIEW_THEME=$1
       ;;
     -s|--window-size)
-      noarg "$@"
-      shift
+      noarg "$@"; shift
       [[ $1 =~ ^[0-9]+x[0-9]+$ ]] || die 22 "Invalid window size ${1@Q} (expected WIDTHxHEIGHT)"
       export MDVIEW_WINDOW_SIZE=$1
       ;;
     -b|--browser)
-      noarg "$@"
-      shift
+      noarg "$@"; shift
       export MDVIEW_BROWSER=$1
       ;;
     -P|--preserve-tmp)
       export MDVIEW_PRESERVE_TMP=1
       ;;
     -V|--version)
-      echo "$SCRIPT_NAME $VERSION"
+      printf '%s %s\n' "$SCRIPT_NAME" "$VERSION"
       exit 0
       ;;
     -h|--help)
@@ -287,6 +284,7 @@ while (($#)); do
       die 22 "Invalid option ${1@Q}"
       ;;
     *)
+      [[ -z $file ]] || die 2 "Too many arguments ${1@Q}"
       file=$1
       ;;
   esac

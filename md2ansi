@@ -36,7 +36,9 @@ declare -- CODE_LANG=''
 declare -A FOOTNOTES=()
 declare -a FOOTNOTE_REFS=()
 
-## Utility Functions ##
+# ================================================================================
+# Utility Functions
+# ================================================================================
 
 declare -i DEBUG=0
 
@@ -56,8 +58,10 @@ warn() { _msg "$YELLOW▲$NC" "$@"; }
 error() { _msg "$RED✗$NC" "$@"; }
 die() { error "${@:2}"; exit "$1"; }
 
-# Debug output with timestamp
-# NOTE: int DEBUG is incremented every time this function is called
+# Debug output with timestamp; doubles as a per-message sequence counter.
+# DEBUG starts as the on/off flag (0 or 1) but is incremented once per
+# emitted message, so successive trace lines carry monotonically increasing
+# IDs (1, 2, 3, ...) in the timestamp prefix.
 #bcscheck disable=BCS0703
 debug() {
   ((DEBUG)) || return 0
@@ -164,12 +168,11 @@ noarg() {
 # ================================================================================
 
 # Detect terminal color support
-# Multiple detection methods to handle different environments:
-# 1. Check if stderr or stdout is a TTY
-# 2. Check TERM variable (for piped/non-TTY but colorful terminals)
-# 3. Verify terminal supports 256 colors via tput
+# Two-stage detection:
+# 1. Gate: stdout AND stderr are TTYs, OR TERM is set and not 'dumb'
+#    (the TERM fallback enables color when output is piped to a colour-aware pager)
+# 2. Capability: tput colors >= 256
 declare -i HAS_COLOR=0
-# Check if we have a terminal
 #bcscheck disable=BCS0207
 if [[ -t 1 && -t 2 ]] || [[ -n ${TERM:-} && $TERM != dumb ]]; then
   declare -i color_count
@@ -294,11 +297,11 @@ colorize_line() {
   # 6. Bold: **text**
   result=$(sed -E "s/\*\*([^*]+)\*\*/${ANSI_BOLD}\1${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
 
-  # 7. Italic: *text* or _text_ (avoid matching inside already-formatted text)
-  # Don't match if preceded by certain characters that indicate formatted text
+  # 7. Italic: *text* only — requires non-asterisk neighbours to avoid clashing
+  # with already-emitted bold markup. Underscore italics (_text_) are
+  # deliberately not handled: too error-prone with snake_case identifiers in
+  # inline code and prose.
   result=$(sed -E "s/([^*])\*([^*]+)\*([^*])/\1${ANSI_ITALIC}\2${ANSI_RESET}${COLOR_TEXT}\3/g" <<<"$result")
-  # Skip underscore italic inside inline code by not matching adjacent to ANSI codes
-  # Don't process _text_ at all - it's too error-prone with code containing underscores
 
   # 8. Strikethrough: ~~text~~
   result=$(sed -E "s/~~([^~]+)~~/${ANSI_STRIKE}\1${ANSI_RESET}${COLOR_TEXT}/g" <<<"$result")
@@ -954,8 +957,6 @@ _align_cell() {
 # ================================================================================
 
 # --------------------------------------------------------------------------------
-# Main markdown parser
-# --------------------------------------------------------------------------------
 # Footnote rendering
 
 # Render collected footnotes at end of document
@@ -985,6 +986,9 @@ render_footnotes() {
     fi
   done
 }
+
+# --------------------------------------------------------------------------------
+# Main markdown parser
 
 # Parse markdown line array and produce ANSI output
 # Usage: parse_markdown lines_array_name
