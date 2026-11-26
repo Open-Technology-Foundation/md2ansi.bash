@@ -23,7 +23,7 @@ assert_exit_code 22 "./md2ansi --width 600 </dev/null 2>&1" "Width 600 (above ma
 assert_exit_code 8 "./md2ansi --width -5 </dev/null 2>&1" "Negative width returns exit 8 (noarg catches leading dash)"
 
 # --------------------------------------------------------------------------------
-# --plain option (disables all formatting)
+# --plain option (disables all formatting features; colors remain)
 
 output=$(echo "# Header **bold** *italic* \`code\`" | ./md2ansi --plain)
 assert_contains "$output" "Header" "Plain mode renders text"

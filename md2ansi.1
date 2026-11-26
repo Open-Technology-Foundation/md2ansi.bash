@@ -39,9 +39,12 @@ Force a specific terminal width instead of auto-detecting. Valid range is
 when terminal detection fails.
 .TP
 .BR \-t ", " \-\-plain
-Enable plain text mode, disabling all ANSI formatting and colors. Output will
-be rendered as plain text suitable for non-terminal contexts or when colors
-are not desired.
+Disable all formatting features at once, as if every \-\-no\-* option below
+were given. Colors and inline styles (header colors, bold, italic) still apply
+when the terminal supports them; run with
+.B TERM=dumb
+for output with no ANSI codes at all (see
+.BR ENVIRONMENT ).
 .SS "Feature Toggle Options"
 All markdown features are enabled by default. Use these options to disable
 specific features:
@@ -267,14 +270,17 @@ Disable tables and syntax highlighting:
 md2ansi --no-tables --no-syntax-highlight README.md
 .fi
 .RE
-.SS "Plain Text Mode"
-Generate plain text output without colors:
+.SS "Output Without ANSI Codes"
+Write plain text with no colors or styles, for example to a file:
 .PP
 .RS
 .nf
-md2ansi --plain README.md > output.txt
+TERM=dumb md2ansi README.md > output.txt
 .fi
 .RE
+.PP
+.B \-\-plain
+alone is not enough: it turns off the formatting features but keeps colors.
 .SS "Browser Preview with mdview"
 Preview a Markdown file in the browser:
 .PP
@@ -370,7 +376,10 @@ syntax highlighting style). Installed to <prefix>/share/mdview/themes/.
 .SH ENVIRONMENT
 .TP
 .B TERM
-Terminal type, used for capability detection via tput
+Terminal type, used for capability detection via tput. Colors are used when
+tput reports 256 or more colors, even when output is piped or redirected (so
+pagers such as less \-R keep them). Set TERM=dumb to turn colors and styles
+off entirely; \-\-plain does not.
 .TP
 .B COLUMNS
 Terminal width in columns. If not set, auto-detected via tput cols or stty

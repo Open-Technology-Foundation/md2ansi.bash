@@ -226,7 +226,8 @@ curl -s https://raw.githubusercontent.com/user/repo/main/README.md | md2ansi
 - ✓ ANSI-aware text wrapping
 - ✓ Terminal width auto-detection
 - ✓ Feature toggles (--no-tables, --no-syntax-highlight, etc.)
-- ✓ Plain text mode for non-ANSI terminals
+- ✓ Plain mode (--plain): every feature toggle off at once
+- ✓ Colorless output with TERM=dumb (log files, non-ANSI terminals)
 - ✓ Debug mode with detailed traces
 
 **Security:**
@@ -380,9 +381,12 @@ md2ansi -D file.md
 md2ansi --width 100 README.md
 md2ansi -w 80 file.md
 
-# Plain text mode (all formatting disabled)
+# Plain mode: every feature toggle off (colors remain)
 md2ansi --plain README.md
 md2ansi -t file.md
+
+# No ANSI codes at all (colors and styles off)
+TERM=dumb md2ansi README.md
 ```
 
 ### Feature Toggles
@@ -421,8 +425,8 @@ md2ansi -w 60 README.md
 # Debug table parsing issues
 md2ansi -D tables.md 2>&1 | grep -i table
 
-# Plain mode for piping to log files
-md2ansi --plain CHANGELOG.md >> release-notes.txt
+# No ANSI codes when appending to log files
+TERM=dumb md2ansi CHANGELOG.md >> release-notes.txt
 
 # Disable heavy features for faster processing
 md2ansi --no-syntax-highlight --no-tables large-file.md
@@ -979,7 +983,7 @@ For reference, processing a 1MB markdown file:
 | Feature | Implementation | Limit/Behavior |
 |:--------|:---------------|:---------------|
 | **File Size Limits** | Pre-processing validation with `wc -c` | 10MB maximum (configurable) |
-| **Input Sanitization** | ANSI escape sequence removal | All input cleaned via `strip_ansi()` |
+| **Input Sanitization** | Escape/control sequence removal | All input cleaned at read time via `sanitize_input()` (CSI, OSC, C0/C1 controls) |
 | **ReDoS Protection** | `timeout` command wrapper for regex | 1 second timeout on complex patterns |
 | **Injection Prevention** | Proper variable quoting throughout | All expansions quoted |
 | **Signal Handling** | `trap` cleanup handlers | Graceful Ctrl-C, proper exit |
@@ -993,8 +997,8 @@ For reference, processing a 1MB markdown file:
 # File size is checked before processing
 validate_file_size "$filepath" "$MAX_FILE_SIZE"
 
-# Input is sanitized
-code=$(sanitize_ansi "$code")
+# Input is sanitized once, as it is read (file or stdin)
+done < <(sanitize_input "$filepath")
 
 # Complex regex uses timeout
 timeout 1 sed "s/$pattern/$replacement/g" <<<"$text"
@@ -1021,7 +1025,7 @@ A: Yes, as long as you have Bash 5.2+ installed. macOS ships with Bash 3.2, so i
 
 **Q: Can I use this in scripts and automation?**
 
-A: Absolutely. Use `--plain` mode for log files, or pipe to `less -R` for interactive viewing.
+A: Absolutely. For log files use `TERM=dumb md2ansi file.md`, which writes no ANSI codes (`--plain` only turns off formatting features and keeps colors). For interactive viewing, pipe to `less -R`.
 
 **Q: How do I check if my terminal supports 256 colors?**
 
@@ -1043,7 +1047,7 @@ A: Run `chmod +x md2ansi md ansi-info md-link-extract mdview` to make scripts ex
 
 **Q: Output is garbled?**
 
-A: Your terminal may not support ANSI codes. Use `--plain` mode: `md2ansi --plain file.md`.
+A: Your terminal may not support ANSI codes. Turn them off with `TERM=dumb md2ansi file.md` (`--plain` keeps colors).
 
 **Q: Tables not rendering correctly?**
 

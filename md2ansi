@@ -9,7 +9,7 @@ declare -rx PS4='+ ${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]:+${FUNCNAME[0]}():
 
 # Script metadata
 declare -r VERSION=1.0.1
-#bcscheck disable=BCS0103
+#bcscheck disable=BCS0103  # SCRIPT_NAME only labels messages; no SCRIPT_DIR needed, so no realpath
 declare -r SCRIPT_NAME=${0##*/}
 
 # Global configuration
@@ -102,8 +102,13 @@ get_terminal_width() {
     fi
   fi
 
-  # Method 3: COLUMNS environment variable
-  width=${COLUMNS:-80}
+  # Method 3: COLUMNS environment variable. Validate before it reaches
+  # local -i: an array subscript in the value would be executed.
+  if [[ ${COLUMNS:-} =~ ^[1-9][0-9]{0,3}$ ]]; then
+    width=$COLUMNS
+  else
+    width=80
+  fi
   ((width > 19)) || width=20
   ((width < 500)) || width=500
   debug "Terminal width from COLUMNS or default: $width"
@@ -127,7 +132,7 @@ validate_file_size() {
   [[ ! -d $filepath ]] || die 4 "${filepath@Q} is a directory, not a file"
 
   # Get file size in bytes
-  file_size=$(stat -c '%s' "$filepath" 2>/dev/null || echo 0)
+  file_size=$(stat -c '%s' -- "$filepath") || die 1 "Cannot stat ${filepath@Q}"
 
   if ((file_size > max_size)); then
     die 9 "File too large: $file_size bytes (maximum: $max_size bytes / 10MB)"
@@ -143,13 +148,14 @@ validate_file_size() {
 # Cleanup function called on exit/interrupt
 cleanup() {
   local -i exitcode=${1:-$?}
-  trap - SIGINT SIGTERM EXIT          # ← prevent recursion
+  trap - EXIT                         # prevent recursion
   # Reset terminal to clean state
   [[ -z ${ANSI_RESET:-} ]] || printf '%s' "$ANSI_RESET"
   exit "$exitcode"
 }
-# Install signal handlers
-trap 'cleanup $?' SIGINT SIGTERM EXIT
+# EXIT alone: Bash still runs it on INT/TERM, and the caller then sees
+# 130/143. Trapping the signals here would exit with whatever $? held (often 0).
+trap 'cleanup $?' EXIT
 
 # --------------------------------------------------------------------------------
 # Argument validation
@@ -173,7 +179,7 @@ noarg() {
 #    (the TERM fallback enables color when output is piped to a colour-aware pager)
 # 2. Capability: tput colors >= 256
 declare -i HAS_COLOR=0
-#bcscheck disable=BCS0207
+#bcscheck disable=BCS0207  # ${TERM:-} braces are required under set -u
 if [[ -t 1 && -t 2 ]] || [[ -n ${TERM:-} && $TERM != dumb ]]; then
   declare -i color_count
   color_count=$(tput colors 2>/dev/null || echo 0)
@@ -212,14 +218,10 @@ if ((HAS_COLOR)); then
               COLOR_LINK=$'\033[38;5;45m'
 
   # Syntax highlighting colors
-              # Pink | Green | Yellow | Gray | Blue | Orange| Purple
+              # Pink | Green | Gray
   declare -r  COLOR_KEYWORD=$'\033[38;5;204m' \
               COLOR_STRING=$'\033[38;5;114m' \
-              COLOR_NUMBER=$'\033[38;5;220m' \
-              COLOR_COMMENT=$'\033[38;5;245m' \
-              COLOR_FUNCTION=$'\033[38;5;81m' \
-              COLOR_CLASS=$'\033[38;5;214m' \
-              COLOR_BUILTIN=$'\033[38;5;147m'
+              COLOR_COMMENT=$'\033[38;5;245m'
 else
   # No color support - all empty strings
   declare -r ANSI_RESET='' ANSI_BOLD='' ANSI_DIM='' ANSI_ITALIC='' ANSI_UNDERLINE='' ANSI_STRIKE=''
@@ -228,20 +230,18 @@ else
 
   declare -r COLOR_TEXT='' COLOR_BLOCKQUOTE='' COLOR_CODEBLOCK='' COLOR_LIST='' COLOR_HR='' COLOR_TABLE='' COLOR_LINK=''
 
-  #shellcheck disable=SC2034
-  declare -r COLOR_KEYWORD='' COLOR_STRING='' COLOR_NUMBER='' COLOR_COMMENT='' COLOR_FUNCTION='' COLOR_CLASS='' COLOR_BUILTIN=''
+  declare -r COLOR_KEYWORD='' COLOR_STRING='' COLOR_COMMENT=''
 fi
 
 # --------------------------------------------------------------------------------
 # Utility functions for ANSI handling
 
-# Strip ANSI escape sequences from text
+# Strip the CSI codes this script emits, to measure visible width.
+# Input never reaches here with ESC intact: process_file runs sanitize_input.
 # Usage: strip_ansi "text with ANSI codes"
 strip_ansi() {
-  local -- text=$1
-  # Remove ANSI escape sequences: ESC [ ... letter
-  #shellcheck disable=SC2001
-  sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' <<<"$text"
+  #shellcheck disable=SC2001  # sed is linear; an extglob ${//} goes quadratic on long lines
+  sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' <<<"$1"
 }
 
 # Get visible length of text (without ANSI codes)
@@ -252,11 +252,20 @@ visible_length() {
   echo "${#stripped}"
 }
 
-# Sanitize input by removing ANSI sequences
-# Usage: sanitize_ansi "user input"
-sanitize_ansi() {
-  local -- text=$1
-  strip_ansi "$text"
+# Make untrusted input inert before it can reach the terminal: remove whole
+# CSI and OSC sequences, then any remaining C0 control except TAB, DEL, and the
+# UTF-8 forms of C1 controls (U+0080-U+009F), which some terminals obey as
+# 8-bit CSI/OSC. An unterminated sequence loses its ESC and prints as text.
+# One linear sed pass: Bash extglob substitution goes quadratic on long lines.
+# LC_ALL=C makes sed match bytes rather than characters.
+# Usage: sanitize_input [FILE]   (reads stdin without FILE)
+sanitize_input() {
+  LC_ALL=C sed -E \
+    -e 's#\x1b\[[0-?]*[ -/]*[@-~]##g' \
+    -e 's#\x1b\][^\x07\x1b]*(\x07|\x1b\\)##g' \
+    -e 's#[\x01-\x08\x0b-\x1f\x7f]##g' \
+    -e 's#\xc2[\x80-\x9f]##g' \
+    -- "$@"
 }
 
 # ================================================================================
@@ -269,7 +278,7 @@ sanitize_ansi() {
 # Apply all inline formatting to a line of text
 # Order matters: process code first, then images, links, then bold/italic/strike
 # Usage: colorize_line "markdown text"
-#bcscheck disable=BCS0207
+#bcscheck disable=BCS0207  # braces mark each colour variable inside the sed replacement text
 colorize_line() {
   local -- line=$1
   local -- result=$line
@@ -311,7 +320,7 @@ colorize_line() {
     result=$(sed -E "s/\[\^([^]]+)\]/${COLOR_TEXT}[${ANSI_BOLD}${ANSI_DIM}^\1${ANSI_RESET}${COLOR_TEXT}]/g" <<<"$result")
   fi
 
-  echo "$result"
+  printf '%s\n' "$result"
 }
 
 # --------------------------------------------------------------------------------
@@ -332,7 +341,7 @@ wrap_text() {
 
   # If text fits, return as-is
   if ((visible_len <= width)); then
-    echo "$text"
+    printf '%s\n' "$text"
     return 0
   fi
 
@@ -355,14 +364,14 @@ wrap_text() {
       current_len+=$word_len
     else
       # Start new line
-      echo "$current_line"
+      printf '%s\n' "$current_line"
       current_line=$word
       current_len=$word_len
     fi
   done
 
   # Print last line
-  [[ -z $current_line ]] || echo "$current_line"
+  [[ -z $current_line ]] || printf '%s\n' "$current_line"
 }
 
 # --------------------------------------------------------------------------------
@@ -546,9 +555,6 @@ render_code_line() {
   local -- lang=${2:-}
   local -- output
 
-  # Sanitize ANSI codes from input
-  code=$(sanitize_ansi "$code")
-
   # If syntax highlighting is disabled, just print with code color
   if ((OPTIONS[syntax_highlight] == 0)) || [[ -z $lang ]]; then
     printf '%s%s%s\n' "$COLOR_CODEBLOCK" "$code" "$ANSI_RESET"
@@ -588,23 +594,23 @@ highlight_python() {
 
   # Comments (highest priority) - return immediately
   if [[ $code =~ ^[[:space:]]*# ]]; then
-    echo "${COLOR_COMMENT}${code}${COLOR_CODEBLOCK}"
+    printf '%s\n' "${COLOR_COMMENT}${code}${COLOR_CODEBLOCK}"
     return 0
   fi
 
   # Docstrings - return immediately
   if [[ $code =~ (\'\'\'|\"\"\") ]]; then
-    echo "${COLOR_STRING}${code}${COLOR_CODEBLOCK}"
+    printf '%s\n' "${COLOR_STRING}${code}${COLOR_CODEBLOCK}"
     return 0
   fi
 
   # For other lines, use minimal highlighting to avoid ANSI code conflicts
   # Just highlight keywords - keep it simple
   local -- result=$code
-  #bcscheck disable=BCS0207
+  #bcscheck disable=BCS0207  # braces mark each colour variable inside the sed replacement text
   result=$(sed -E "s/\\b(def|class|if|elif|else|for|while|return|import|from|print)\\b/${COLOR_KEYWORD}\\1${COLOR_CODEBLOCK}/g" <<<"$result")
 
-  echo "$result"
+  printf '%s\n' "$result"
 }
 
 # Simple JavaScript syntax highlighting
@@ -614,16 +620,16 @@ highlight_javascript() {
 
   # Comments - return immediately
   if [[ $code =~ ^[[:space:]]*// ]]; then
-    echo "${COLOR_COMMENT}${code}${COLOR_CODEBLOCK}"
+    printf '%s\n' "${COLOR_COMMENT}${code}${COLOR_CODEBLOCK}"
     return 0
   fi
 
   # Minimal highlighting - just keywords
   local -- result=$code
-  #bcscheck disable=BCS0207
+  #bcscheck disable=BCS0207  # braces mark each colour variable inside the sed replacement text
   result=$(sed -E "s/\\b(function|const|let|var|if|else|for|while|return|class|console)\\b/${COLOR_KEYWORD}\\1${COLOR_CODEBLOCK}/g" <<<"$result")
 
-  echo "$result"
+  printf '%s\n' "$result"
 }
 
 # Simple Bash syntax highlighting
@@ -633,16 +639,16 @@ highlight_bash() {
 
   # Comments - return immediately
   if [[ $code =~ ^[[:space:]]*# ]]; then
-    echo "${COLOR_COMMENT}${code}${COLOR_CODEBLOCK}"
+    printf '%s\n' "${COLOR_COMMENT}${code}${COLOR_CODEBLOCK}"
     return 0
   fi
 
   # Minimal highlighting - just keywords and common built-ins
   local -- result=$code
-  #bcscheck disable=BCS0207
+  #bcscheck disable=BCS0207  # braces mark each colour variable inside the sed replacement text
   result=$(sed -E "s/\\b(if|then|else|elif|fi|for|while|do|done|echo|printf|local|declare)\\b/${COLOR_KEYWORD}\\1${COLOR_CODEBLOCK}/g" <<<"$result")
 
-  echo "$result"
+  printf '%s\n' "$result"
 }
 
 # ================================================================================
@@ -659,7 +665,7 @@ render_table() {
   local -n _md_lines=$1
   local -n _md_idx=$2
 
-  #shellcheck disable=SC2034
+  #shellcheck disable=SC2034  # alignments/col_widths are filled and read through namerefs
   local -a table_lines=() all_rows=() data_rows=() alignments=() col_widths=()
   local -i has_alignment=0 col_count=0
   local -- line
@@ -840,9 +846,9 @@ _calculate_column_widths() {
 # Usage: _render_table_output data_rows alignments col_widths col_count has_alignment
 _render_table_output() {
   local -n _data_rows=$1
-  #shellcheck disable=SC2178
+  #shellcheck disable=SC2178  # array nameref; shellcheck conflates it with _parse_table_structure's
   local -n _alignments=$2
-  #shellcheck disable=SC2178
+  #shellcheck disable=SC2178  # array nameref; shellcheck conflates it with _calculate_column_widths'
   local -n _col_widths=$3
   local -i _col_count=$4
   local -i _has_alignment=$5
@@ -1059,17 +1065,13 @@ parse_markdown() {
     fi
 
     # --------------------------------------------------------------------------------
-    # TABLES - Lines starting with |
-    if [[ $line =~ ^[[:space:]]*\| ]] && ((OPTIONS[tables])); then
+    # TABLES - two or more consecutive lines starting with |. A lone pipe line,
+    # or any with tables disabled, falls through and renders as regular text
+    # (render_table would otherwise return 1 and set -e would end the run).
+    if ((OPTIONS[tables])) \
+        && [[ $line =~ ^[[:space:]]*\| && ${_lines[i+1]:-} =~ ^[[:space:]]*\| ]]; then
       render_table _lines i
       # render_table updates i to next line after table
-      continue
-    elif [[ $line =~ ^[[:space:]]*\| ]] && ((OPTIONS[tables] == 0)); then
-      # Tables disabled but looks like a table - treat as plain text
-      formatted_line=$(colorize_line "$line")
-      readarray -t wrapped < <(wrap_text "${COLOR_TEXT}${formatted_line}" "$TERM_WIDTH")
-      printf '%s\n' "${wrapped[@]}"
-      i+=1
       continue
     fi
 
@@ -1217,7 +1219,8 @@ Options:
   -V, --version           Show version information and exit
   -D, --debug             Enable debug mode with detailed traces (to stderr)
   -w, --width WIDTH       Force specific terminal width (default: auto-detect)
-  -t, --plain             Plain text mode (disable all formatting)
+  -t, --plain             Disable all formatting features (every --no-*
+                          option below); colors remain, TERM=dumb removes them
 
 Feature Toggles:
   --no-footnotes          Disable footnotes processing
@@ -1243,8 +1246,11 @@ Examples:
   # Disable specific features
   $SCRIPT_NAME --no-tables --no-syntax-highlight doc.md
 
-  # Plain text mode (all formatting disabled)
+  # Disable all formatting features (colors remain)
   $SCRIPT_NAME --plain README.md
+
+  # No ANSI codes at all, e.g. for a log file
+  TERM=dumb $SCRIPT_NAME README.md > output.txt
 
 Security:
   - Files larger than 10MB are rejected for safety
@@ -1257,7 +1263,7 @@ HELP
 }
 
 # Argument parsing
-#bcscheck disable=BCS0804
+#bcscheck disable=BCS0804  # kept in its own function; main() calls it first, then sets readonly
 parse_arguments() {
   while (($#)); do
     case $1 in
@@ -1280,7 +1286,7 @@ parse_arguments() {
         exit 0
         ;;
       -t|--plain)
-        # Plain mode for environments where ANSI formatting may cause issues
+        # Feature toggles only: colors follow the terminal check (TERM=dumb for none)
         OPTIONS[footnotes]=0
         OPTIONS[syntax_highlight]=0
         OPTIONS[tables]=0
@@ -1349,7 +1355,7 @@ process_file() {
         continue
       fi
       lines+=("$line")
-    done <"$filepath"
+    done < <(sanitize_input "$filepath")
   else
     # Process stdin
     debug 'Processing stdin'
@@ -1369,7 +1375,7 @@ process_file() {
         continue
       fi
       lines+=("$line")
-    done
+    done < <(sanitize_input)
   fi
 
   debug "Read ${#lines[@]} lines"
