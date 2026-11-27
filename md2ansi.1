@@ -416,8 +416,9 @@ Base directory for user data files (default: ~/.local/share). mdview searches
 $XDG_DATA_HOME/mdview/themes/ for user-installed themes.
 .TP
 .B XDG_RUNTIME_DIR
-Base directory for runtime files (default: /tmp). mdview creates temporary HTML
-files in $XDG_RUNTIME_DIR/mdview/.
+Base directory for runtime files. mdview creates temporary HTML files in
+$XDG_RUNTIME_DIR/mdview/; when XDG_RUNTIME_DIR is unset or empty, in
+$TMPDIR/mdview/, and in /tmp/mdview/ when neither is set.
 .SH EXIT STATUS
 Exit codes follow BCS0602 (Bash Coding Standard):
 .TP

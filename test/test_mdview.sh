@@ -15,7 +15,7 @@ test_section "mdview"
 # --version
 output=$(./mdview --version 2>&1)
 assert_contains "$output" "mdview" "--version contains program name"
-assert_contains "$output" "1.0.1" "--version contains version number"
+assert_contains "$output" "1.0.2" "--version contains version number"
 assert_exit_code 0 "--version exits 0" ./mdview --version
 
 # --help
@@ -28,7 +28,7 @@ assert_exit_code 0 "--help exits 0" ./mdview --help
 
 # Short flags equivalent to long
 output_V=$(./mdview -V 2>&1)
-assert_contains "$output_V" "1.0.1" "-V is equivalent to --version"
+assert_contains "$output_V" "1.0.2" "-V is equivalent to --version"
 output_h=$(./mdview -h 2>&1)
 assert_contains "$output_h" "Usage:" "-h is equivalent to --help"
 
@@ -130,6 +130,18 @@ if command -v pandoc &>/dev/null && [[ -d themes ]]; then
   if [[ -n "$tmpfile" && -f "$tmpfile" ]]; then
     content=$(head -5 -- "$tmpfile")
     assert_contains "$content" "html" "Temp file contains HTML content"
+  fi
+
+  # Without XDG_RUNTIME_DIR the session goes under TMPDIR/mdview (1.0.1 read
+  # TMP_DIR, a typo, and so always fell back to /tmp/mdview)
+  assert_exit_code 0 "Pipeline with TMPDIR set and XDG_RUNTIME_DIR unset exits 0" \
+    env -u XDG_RUNTIME_DIR TMPDIR="$TEST_TMPDIR" MDVIEW_BROWSER=/bin/true ./mdview README.md
+  # -f, not the array length: without nullglob an unmatched glob stays literal
+  tmpfiles=("$TEST_TMPDIR"/mdview/session.*/README.html)
+  if [[ -f ${tmpfiles[0]:-} ]]; then
+    assert_pass "Without XDG_RUNTIME_DIR, temp HTML goes under TMPDIR/mdview"
+  else
+    assert_fail "Without XDG_RUNTIME_DIR, temp HTML should go under TMPDIR/mdview"
   fi
 
   # Theme override works end-to-end

@@ -673,9 +673,9 @@ md2ansi.bash/
     ├── test_gaps.sh           # Audit gap coverage (158 lines)
     ├── test_md.sh             # md pagination wrapper (49 lines)
     ├── test_md_link_extract.sh # md-link-extract URL extraction (141 lines)
-    ├── test_mdview.sh         # mdview utility tests (174 lines)
+    ├── test_mdview.sh         # mdview utility tests (186 lines)
     ├── test_options.sh        # Feature toggles (125 lines)
-    ├── test_security.sh       # Security features (139 lines)
+    ├── test_security.sh       # Security features (140 lines)
     ├── test_tables.sh         # Tables (100 lines)
     └── test_wrapping.sh       # Text wrapping (186 lines)
 ```
@@ -683,8 +683,8 @@ md2ansi.bash/
 **Total Project Size:**
 - Main executable: 1,229 lines
 - Utility scripts: 734 lines (md, ansi-info, md-link-extract, mdview)
-- Test suite: 1,976 lines (13 test files + runner)
-- **Total: 3,939 lines**
+- Test suite: 1,989 lines (13 test files + runner)
+- **Total: 3,952 lines**
 
 ### Internal Code Organization
 
@@ -772,13 +772,13 @@ The project includes a comprehensive test suite with 13 test files covering all 
 | **test_gaps.sh** | 158 | Audit gap coverage, combined flag parsing, fence mismatch handling |
 | **test_md.sh** | 49 | `md` pagination wrapper, its own --help/--version, less flag passthrough |
 | **test_md_link_extract.sh** | 141 | Inline / reference / bare-URL extraction, dedupe, multi-file |
-| **test_mdview.sh** | 174 | mdview CLI options, argument validation, sourced mode, full pipeline |
+| **test_mdview.sh** | 186 | mdview CLI options, argument validation, sourced mode, full pipeline |
 | **test_options.sh** | 125 | Feature toggles, --no-* options, plain mode, option combinations |
-| **test_security.sh** | 139 | File size limits, line length limits, input sanitization, pathological regex input |
+| **test_security.sh** | 140 | File size limits, line length limits, input sanitization, pathological regex input |
 | **test_tables.sh** | 100 | Table parsing, alignment (left/center/right), borders, inline formatting in cells |
 | **test_wrapping.sh** | 186 | Text wrapping, ANSI-aware wrapping, terminal width handling |
 
-**Total test coverage: 1,976 lines**
+**Total test coverage: 1,989 lines**
 
 ### Running Tests
 
