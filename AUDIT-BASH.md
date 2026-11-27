@@ -340,4 +340,8 @@ git show f93e321:AUDIT-BASH.md                                   # prior audit c
 git status                                                       # only AUDIT-BASH.md added
 ```
 
+## Post-Audit Addendum (2026-11-27)
+
+The Executive Summary and the Security strengths credit md2ansi with a "ReDoS guard via `timeout`", and File Statistics lists `timeout` as a dependency. There is no such guard: md2ansi never calls `timeout`, and its regexes run in `sed` and `[[ =~ ]]` with no time limit. The help text, man page and README carried the same claim; 1.0.2 corrects them.
+
 #fin

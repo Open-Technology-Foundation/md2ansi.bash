@@ -22,6 +22,16 @@ assert_exit_code 22 "./md2ansi --width 10 </dev/null 2>&1" "Width 10 (below mini
 assert_exit_code 22 "./md2ansi --width 600 </dev/null 2>&1" "Width 600 (above maximum) returns error"
 assert_exit_code 8 "./md2ansi --width -5 </dev/null 2>&1" "Negative width returns exit 8 (noarg catches leading dash)"
 
+# A leading 0 is decimal, as in the Python version (Bash arithmetic would
+# reject 08 and read 040 as octal 32)
+output=$(echo "Test" | ./md2ansi -D --width 040 2>&1 >/dev/null)
+assert_contains "$output" "Terminal width: 40" "Width 040 is read as decimal 40, not octal"
+output=$(./md2ansi --width 08 </dev/null 2>&1) ||:
+assert_contains "$output" "Width '08' must be between 20 and 500" "Width 08 is decimal 8, below the minimum"
+assert_exit_code 22 "./md2ansi --width 08 </dev/null 2>&1" "Width 08 returns exit 22, not a Bash error"
+# 2^64+100 would wrap to 100 in Bash arithmetic and pass the range check
+assert_exit_code 22 "./md2ansi --width 18446744073709551716 </dev/null 2>&1" "Width that overflows is rejected"
+
 # --------------------------------------------------------------------------------
 # --plain option (disables all formatting features; colors remain)
 
