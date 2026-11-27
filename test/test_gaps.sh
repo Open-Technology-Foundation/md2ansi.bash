@@ -62,8 +62,8 @@ else
   assert_fail "Combined -tD should produce debug output"
 fi
 
-# -w80 splits as -w + -80 (stacking prefixes dash), noarg catches leading dash
-assert_exit_code 8 "echo test | ./md2ansi -w80 2>&1" "Attached value -w80 returns exit 8 (missing argument)"
+# -w takes the rest of the word as its value, as argparse does (not -w + -80)
+assert_exit_code 0 "echo test | ./md2ansi -w80 >/dev/null 2>&1" "Attached value -w80 is accepted"
 
 # Invalid combined option returns error (e.g., -Dz)
 assert_exit_code 22 "echo test | ./md2ansi -Dz 2>&1" "Invalid combined option -Dz returns error"

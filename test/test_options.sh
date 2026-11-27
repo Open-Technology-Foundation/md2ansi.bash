@@ -32,6 +32,21 @@ assert_exit_code 22 "./md2ansi --width 08 </dev/null 2>&1" "Width 08 returns exi
 # 2^64+100 would wrap to 100 in Bash arithmetic and pass the range check
 assert_exit_code 22 "./md2ansi --width 18446744073709551716 </dev/null 2>&1" "Width that overflows is rejected"
 
+# Attached values, as the Python version (argparse) accepts
+output=$(echo "Test" | ./md2ansi -D -w120 2>&1 >/dev/null)
+assert_contains "$output" "Terminal width: 120" "-w120 (attached value) sets the width"
+output=$(echo "Test" | ./md2ansi -D -w=120 2>&1 >/dev/null)
+assert_contains "$output" "Terminal width: 120" "-w=120 sets the width"
+output=$(echo "Test" | ./md2ansi -D --width=120 2>&1 >/dev/null)
+assert_contains "$output" "Terminal width: 120" "--width=120 sets the width"
+output=$(echo "Test" | ./md2ansi -Dw120 2>&1 >/dev/null)
+assert_contains "$output" "Terminal width: 120" "-Dw120 (bundled, attached value) sets the width"
+output=$(./md2ansi --width=08 </dev/null 2>&1) ||:
+assert_contains "$output" "Width '08' must be between 20 and 500" "--width=08 is validated like --width 08"
+output=$(./md2ansi --width=-5 </dev/null 2>&1) ||:
+assert_contains "$output" "Invalid width '-5'" "--width=-5 is an invalid width, not a missing one"
+assert_exit_code 22 "./md2ansi --width= </dev/null 2>&1" "--width= (empty value) returns error"
+
 # --------------------------------------------------------------------------------
 # --plain option (disables all formatting features; colors remain)
 

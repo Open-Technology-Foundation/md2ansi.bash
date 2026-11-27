@@ -1,4 +1,4 @@
-.TH MD2ANSI 1 "2026-11-27" "md2ansi 1.0.2" "User Commands"
+.TH MD2ANSI 1 "2026-11-27" "md2ansi 1.0.3" "User Commands"
 .SH NAME
 md2ansi \- convert Markdown to ANSI-colored terminal output
 .SH SYNOPSIS
@@ -37,7 +37,8 @@ troubleshooting rendering issues or understanding the parsing process.
 Force a specific terminal width instead of auto-detecting; overrides
 COLUMNS. Valid range is 20-500 columns, read as decimal (040 is 40). Useful
 for generating output for specific display widths or when terminal
-detection fails.
+detection fails. The value may also be attached: \-w120, \-w=120 or
+\-\-width=120.
 .TP
 .BR \-t ", " \-\-plain
 Disable all formatting features at once, as if every \-\-no\-* option below

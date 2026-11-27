@@ -8,7 +8,7 @@ declare -rx PATH=/usr/local/bin:/usr/bin:/bin
 declare -rx PS4='+ ${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]:+${FUNCNAME[0]}():} '
 
 # Script metadata
-declare -r VERSION=1.0.2
+declare -r VERSION=1.0.3
 #bcscheck disable=BCS0103  # SCRIPT_NAME only labels messages; no SCRIPT_DIR needed, so no realpath
 declare -r SCRIPT_NAME=${0##*/}
 
@@ -1072,15 +1072,21 @@ HELP
 # Argument parsing
 #bcscheck disable=BCS0804  # kept in its own function; main() calls it first, then sets readonly
 parse_arguments() {
+  local -- width
+  #bcscheck disable=BCS0801  # attached -w120/--width=120 kept for parity with the Python reference (argparse)
   while (($#)); do
     case $1 in
-      -w|--width)
-        noarg "$@"
-        shift
+      -w|--width|-w?*|--width=*)
+        # An attached value (-w120, -w=120, --width=120) is explicit, as in argparse: no noarg check
+        case $1 in
+          --width=*) width=${1#*=} ;;
+          -w?*)      width=${1:2}; width=${width#=} ;;
+          *)         noarg "$@"; shift; width=$1 ;;
+        esac
         # Decimal, not octal for a leading 0 (08 fails, 040 is 32); nine digits cannot overflow
-        [[ $1 =~ ^[0-9]{1,9}$ ]] || die 22 "Invalid width ${1@Q}"
-        TERM_WIDTH=$((10#$1))
-        ((TERM_WIDTH >= 20 && TERM_WIDTH <= 500)) || die 22 "Width ${1@Q} must be between 20 and 500"
+        [[ $width =~ ^[0-9]{1,9}$ ]] || die 22 "Invalid width ${width@Q}"
+        TERM_WIDTH=$((10#$width))
+        ((TERM_WIDTH >= 20 && TERM_WIDTH <= 500)) || die 22 "Width ${width@Q} must be between 20 and 500"
         ;;
       -D|--debug)
         DEBUG=1
