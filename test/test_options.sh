@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Command-line option tests for md2ansi Bash implementation
 # This file is sourced by run_tests
+[[ ${BASH_SOURCE[0]} != "$0" ]] || {
+  >&2 echo "Error: ${0@Q} must be sourced by run_tests"
+  exit 1
+}
 
 test_section "Command-Line Options"
 
@@ -17,10 +21,10 @@ output=$(echo "Test" | ./md2ansi --width 500)
 assert_contains "$output" "Test" "Width 500 (maximum) works"
 
 # Invalid width values should fail (exit code 22 for invalid arguments, 2 for missing arg)
-assert_exit_code 22 "./md2ansi --width abc </dev/null 2>&1" "Width 'abc' returns error"
-assert_exit_code 22 "./md2ansi --width 10 </dev/null 2>&1" "Width 10 (below minimum) returns error"
-assert_exit_code 22 "./md2ansi --width 600 </dev/null 2>&1" "Width 600 (above maximum) returns error"
-assert_exit_code 8 "./md2ansi --width -5 </dev/null 2>&1" "Negative width returns exit 8 (noarg catches leading dash)"
+assert_exit_code 22 "Width 'abc' returns error" ./md2ansi --width abc
+assert_exit_code 22 "Width 10 (below minimum) returns error" ./md2ansi --width 10
+assert_exit_code 22 "Width 600 (above maximum) returns error" ./md2ansi --width 600
+assert_exit_code 8 "Negative width returns exit 8 (noarg catches leading dash)" ./md2ansi --width -5
 
 # A leading 0 is decimal, as in the Python version (Bash arithmetic would
 # reject 08 and read 040 as octal 32)
@@ -28,9 +32,9 @@ output=$(echo "Test" | ./md2ansi -D --width 040 2>&1 >/dev/null)
 assert_contains "$output" "Terminal width: 40" "Width 040 is read as decimal 40, not octal"
 output=$(./md2ansi --width 08 </dev/null 2>&1) ||:
 assert_contains "$output" "Width '08' must be between 20 and 500" "Width 08 is decimal 8, below the minimum"
-assert_exit_code 22 "./md2ansi --width 08 </dev/null 2>&1" "Width 08 returns exit 22, not a Bash error"
+assert_exit_code 22 "Width 08 returns exit 22, not a Bash error" ./md2ansi --width 08
 # 2^64+100 would wrap to 100 in Bash arithmetic and pass the range check
-assert_exit_code 22 "./md2ansi --width 18446744073709551716 </dev/null 2>&1" "Width that overflows is rejected"
+assert_exit_code 22 "Width that overflows is rejected" ./md2ansi --width 18446744073709551716
 
 # Attached values, as the Python version (argparse) accepts
 output=$(echo "Test" | ./md2ansi -D -w120 2>&1 >/dev/null)
@@ -45,7 +49,7 @@ output=$(./md2ansi --width=08 </dev/null 2>&1) ||:
 assert_contains "$output" "Width '08' must be between 20 and 500" "--width=08 is validated like --width 08"
 output=$(./md2ansi --width=-5 </dev/null 2>&1) ||:
 assert_contains "$output" "Invalid width '-5'" "--width=-5 is an invalid width, not a missing one"
-assert_exit_code 22 "./md2ansi --width= </dev/null 2>&1" "--width= (empty value) returns error"
+assert_exit_code 22 "--width= (empty value) returns error" ./md2ansi --width=
 
 # --------------------------------------------------------------------------------
 # --plain option (disables all formatting features; colors remain)
@@ -115,7 +119,7 @@ assert_contains "$output" "Task" "Multiple --no-* flags work together"
 # --------------------------------------------------------------------------------
 # Invalid/unrecognized options
 
-assert_exit_code 22 "./md2ansi --invalid-option </dev/null 2>&1" "Invalid option returns error"
-assert_exit_code 22 "./md2ansi --unknown </dev/null 2>&1" "Unknown option returns error"
+assert_exit_code 22 "Invalid option returns error" ./md2ansi --invalid-option
+assert_exit_code 22 "Unknown option returns error" ./md2ansi --unknown
 
 #fin

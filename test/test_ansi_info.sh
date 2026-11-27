@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Tests for ansi-info — terminal capability report
 # This file is sourced by run_tests
+[[ ${BASH_SOURCE[0]} != "$0" ]] || {
+  >&2 echo "Error: ${0@Q} must be sourced by run_tests"
+  exit 1
+}
 
 test_section "ansi-info"
 
@@ -9,15 +13,15 @@ test_section "ansi-info"
 
 output=$(./ansi-info --version 2>&1)
 assert_contains "$output" "1.1.0" "--version contains version 1.1.0"
-assert_exit_code 0 "./ansi-info --version" "--version exits 0"
+assert_exit_code 0 "--version exits 0" ./ansi-info --version
 
 output=$(./ansi-info -V 2>&1)
 assert_contains "$output" "1.1.0" "-V is short for --version"
-assert_exit_code 0 "./ansi-info -V" "-V exits 0"
+assert_exit_code 0 "-V exits 0" ./ansi-info -V
 
 output=$(./ansi-info --help 2>&1)
 assert_contains "$output" "Usage" "--help shows usage"
-assert_exit_code 0 "./ansi-info --help" "--help exits 0"
+assert_exit_code 0 "--help exits 0" ./ansi-info --help
 
 output=$(./ansi-info -h 2>&1)
 assert_contains "$output" "Usage" "-h is short for --help"
@@ -26,7 +30,7 @@ assert_contains "$output" "Usage" "-h is short for --help"
 # Full report (less -F auto-dumps when stdout is not a tty)
 
 output=$(./ansi-info 2>&1)
-assert_exit_code 0 "./ansi-info" "Full run exits 0"
+assert_exit_code 0 "Full run exits 0" ./ansi-info
 assert_not_empty "$output" "Full run produces non-empty output"
 
 # Section 1: 256-colour palette with #RRGGBB labels
@@ -51,8 +55,8 @@ assert_contains "$output" "Truecolor" "Footer contains Truecolor label"
 # --------------------------------------------------------------------------------
 # Argument validation
 
-assert_exit_code 22 "./ansi-info --bogus 2>&1" "Invalid option exits 22"
-assert_exit_code 22 "./ansi-info -z 2>&1" "Invalid short option exits 22"
-assert_exit_code 2 "./ansi-info junk 2>&1" "Unexpected positional arg exits 2"
+assert_exit_code 22 "Invalid option exits 22" ./ansi-info --bogus
+assert_exit_code 22 "Invalid short option exits 22" ./ansi-info -z
+assert_exit_code 2 "Unexpected positional arg exits 2" ./ansi-info junk
 
 #fin

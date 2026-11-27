@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Text wrapping tests for md2ansi Bash implementation
 # This file is sourced by run_tests
+[[ ${BASH_SOURCE[0]} != "$0" ]] || {
+  >&2 echo "Error: ${0@Q} must be sourced by run_tests"
+  exit 1
+}
 
 test_section "Text Wrapping"
 
@@ -12,7 +16,7 @@ long_text="This is a very long line of text that should wrap to multiple lines w
 output=$(echo "$long_text" | ./md2ansi --width 20)
 # Count lines in output (wrapped text should have multiple lines)
 line_count=$(echo "$output" | wc -l)
-if [ "$line_count" -gt 3 ]; then
+if ((line_count > 3)); then
   assert_pass "Width 20 wraps long text to multiple lines"
 else
   assert_fail "Width 20 should wrap text"
@@ -22,7 +26,7 @@ fi
 output=$(echo "$long_text" | ./md2ansi --width 80)
 assert_contains "$output" "This is a very long" "Width 80 renders text"
 line_count=$(echo "$output" | wc -l)
-if [ "$line_count" -le 3 ]; then
+if ((line_count <= 3)); then
   assert_pass "Width 80 wraps appropriately"
 else
   assert_pass "Width 80 processes text"

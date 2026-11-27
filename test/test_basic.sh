@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Basic markdown feature tests for md2ansi Bash implementation
 # This file is sourced by run_tests
+[[ ${BASH_SOURCE[0]} != "$0" ]] || {
+  >&2 echo "Error: ${0@Q} must be sourced by run_tests"
+  exit 1
+}
 
 test_section "Basic Markdown Features"
 
@@ -82,8 +86,8 @@ assert_contains "$output" "Line 2" "Second paragraph"
 # --------------------------------------------------------------------------------
 # Command-line options
 
-assert_exit_code 0 "./md2ansi --version" "Version flag works"
-assert_exit_code 0 "./md2ansi --help" "Help flag works"
+assert_exit_code 0 "Version flag works" ./md2ansi --version
+assert_exit_code 0 "Help flag works" ./md2ansi --help
 
 output=$(./md2ansi --version)
 assert_contains "$output" "1.0.3" "Version string correct"
@@ -91,10 +95,10 @@ assert_contains "$output" "1.0.3" "Version string correct"
 # --------------------------------------------------------------------------------
 # File processing
 
-echo "# Test" > /tmp/md2ansi_test.md
-output=$(./md2ansi /tmp/md2ansi_test.md)
+# TEST_TMPDIR comes from run_tests (mktemp -d, removed by its EXIT trap)
+echo "# Test" > "$TEST_TMPDIR"/md2ansi_test.md || assert_fail "Cannot write fixture md2ansi_test.md"
+output=$(./md2ansi -- "$TEST_TMPDIR"/md2ansi_test.md)
 assert_contains "$output" "Test" "File processing works"
-rm -f /tmp/md2ansi_test.md
 
 # --------------------------------------------------------------------------------
 # Nested formatting
@@ -123,6 +127,6 @@ assert_contains "$output" "strike" "Strikethrough inside bold"
 # --------------------------------------------------------------------------------
 # Error handling
 
-assert_exit_code 3 "./md2ansi /nonexistent/file.md 2>&1" "Non-existent file returns exit 3 (not found)"
+assert_exit_code 3 "Non-existent file returns exit 3 (not found)" ./md2ansi /nonexistent/file.md
 
 #fin

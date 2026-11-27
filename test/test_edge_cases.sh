@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Edge case and error handling tests for md2ansi Bash implementation
 # This file is sourced by run_tests
+[[ ${BASH_SOURCE[0]} != "$0" ]] || {
+  >&2 echo "Error: ${0@Q} must be sourced by run_tests"
+  exit 1
+}
 
 test_section "Edge Cases and Error Handling"
 
@@ -9,15 +13,15 @@ test_section "Edge Cases and Error Handling"
 
 # Completely empty file
 output=$(echo "" | ./md2ansi)
-assert_exit_code 0 "echo '' | ./md2ansi" "Empty input returns success"
+assert_exit_code_input 0 "Empty input returns success" $'\n' ./md2ansi
 
 # Whitespace only
 output=$(echo "   " | ./md2ansi)
-assert_exit_code 0 "echo '   ' | ./md2ansi" "Whitespace-only input succeeds"
+assert_exit_code_input 0 "Whitespace-only input succeeds" $'   \n' ./md2ansi
 
 # Multiple blank lines
 output=$(echo -e "\n\n\n" | ./md2ansi)
-assert_exit_code 0 "echo -e '\\n\\n\\n' | ./md2ansi" "Multiple blank lines succeed"
+assert_exit_code_input 0 "Multiple blank lines succeed" $'\n\n\n\n' ./md2ansi
 
 # --------------------------------------------------------------------------------
 # Code block edge cases
@@ -28,12 +32,12 @@ assert_contains "$output" "def" "Unclosed code block renders content"
 
 # Code block with no content
 output=$(echo -e "\`\`\`\n\`\`\`" | ./md2ansi)
-assert_exit_code 0 "echo -e '\`\`\`\\n\`\`\`' | ./md2ansi" "Empty code block succeeds"
+assert_exit_code_input 0 "Empty code block succeeds" $'```\n```\n' ./md2ansi
 
 # Code block at end without trailing newline
 #shellcheck disable=SC2016  # printf interprets \n, not bash
 printf '```\ncode\n```' | ./md2ansi >/dev/null
-assert_exit_code 0 "printf '\`\`\`\\ncode\\n\`\`\`' | ./md2ansi >/dev/null" "Code block without trailing newline"
+assert_exit_code_input 0 "Code block without trailing newline" $'```\ncode\n```' ./md2ansi
 
 # Mixed fence types (open with ```, close with ~~~)
 output=$(echo -e "\`\`\`\ncode\n~~~" | ./md2ansi 2>&1)
@@ -68,7 +72,7 @@ assert_contains "$output" "Header" "Table with only header renders"
 
 # Table at end of file without trailing newline
 printf '| A | B |\n|---|---|\n| 1 | 2 |' | ./md2ansi >/dev/null
-assert_exit_code 0 "printf '| A |\\n|---|\\n| 1 |' | ./md2ansi >/dev/null" "Table without trailing newline"
+assert_exit_code_input 0 "Table without trailing newline" $'| A |\n|---|\n| 1 |' ./md2ansi
 
 # Table with very wide cell content
 wide_cell=$(printf 'x%.0s' {1..200})

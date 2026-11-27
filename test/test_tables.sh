@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Table rendering tests for md2ansi Bash implementation
 # This file is sourced by run_tests
+[[ ${BASH_SOURCE[0]} != "$0" ]] || {
+  >&2 echo "Error: ${0@Q} must be sourced by run_tests"
+  exit 1
+}
 
 test_section "Table Rendering"
 

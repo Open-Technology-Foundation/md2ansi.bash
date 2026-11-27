@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016  # single-quoted markdown samples hold literal backticks, not substitutions
 # Audit gap tests for md2ansi Bash implementation
 # Covers 5 areas identified in AUDIT-BASH.md §7 "Missing Test Coverage"
 # This file is sourced by run_tests
+[[ ${BASH_SOURCE[0]} != "$0" ]] || {
+  >&2 echo "Error: ${0@Q} must be sourced by run_tests"
+  exit 1
+}
 
 test_section "Audit Gap Coverage"
 
@@ -63,10 +67,10 @@ else
 fi
 
 # -w takes the rest of the word as its value, as argparse does (not -w + -80)
-assert_exit_code 0 "echo test | ./md2ansi -w80 >/dev/null 2>&1" "Attached value -w80 is accepted"
+assert_exit_code_input 0 "Attached value -w80 is accepted" $'test\n' ./md2ansi -w80
 
 # Invalid combined option returns error (e.g., -Dz)
-assert_exit_code 22 "echo test | ./md2ansi -Dz 2>&1" "Invalid combined option -Dz returns error"
+assert_exit_code_input 22 "Invalid combined option -Dz returns error" $'test\n' ./md2ansi -Dz
 
 # ================================================================================
 # 3. Stdin size limit rejection
@@ -79,36 +83,32 @@ assert_not_empty "$output" "Stdin under 10MB (1MB) processes successfully"
 
 # Stdin over 10MB rejected with exit code 9 (die 9 in process_file)
 # Generate just over 10MB (10.5MB) piped to stdin
-set +e
-dd if=/dev/zero bs=1024 count=10752 2>/dev/null | tr '\0' 'x' | ./md2ansi >/dev/null 2>/tmp/md2ansi_stderr_limit.txt
-stdin_exit=$?
-set -e
+# 2>&1 >/dev/null: capture stderr, discard stdout
+stdin_exit=0
+stderr_msg=$(dd if=/dev/zero bs=1024 count=10752 2>/dev/null | tr '\0' 'x' | ./md2ansi 2>&1 >/dev/null) || stdin_exit=$?
 assert_equals "9" "$stdin_exit" "Stdin over 10MB returns exit code 9"
 
 # Error message mentions stdin and maximum size
-stderr_msg=$(</tmp/md2ansi_stderr_limit.txt)
 assert_contains "$stderr_msg" "stdin" "Stdin size error mentions stdin"
 assert_contains "$stderr_msg" "maximum size" "Stdin size error mentions maximum size"
-rm -f /tmp/md2ansi_stderr_limit.txt
 
 # ================================================================================
 # 4. Multi-file processing
 # Code at md2ansi:1443-1452 processes multiple files sequentially
 # ================================================================================
 
-# Setup temp files
-echo '# File One' > /tmp/md2ansi_multi1.md
-echo '# File Two' > /tmp/md2ansi_multi2.md
+# Setup temp files (TEST_TMPDIR comes from run_tests: mktemp -d, removed by its EXIT trap)
+echo '# File One' > "$TEST_TMPDIR"/md2ansi_multi1.md || assert_fail "Cannot write fixture md2ansi_multi1.md"
+echo '# File Two' > "$TEST_TMPDIR"/md2ansi_multi2.md || assert_fail "Cannot write fixture md2ansi_multi2.md"
 
 # Two files process in sequence (both headers present in output)
-output=$(./md2ansi /tmp/md2ansi_multi1.md /tmp/md2ansi_multi2.md)
+output=$(./md2ansi -- "$TEST_TMPDIR"/md2ansi_multi1.md "$TEST_TMPDIR"/md2ansi_multi2.md)
 assert_contains "$output" "File One" "Multi-file - first file content present"
 assert_contains "$output" "File Two" "Multi-file - second file content present"
 
 # File order preserved (file1 content before file2)
-# Strip ANSI codes for position comparison
-#shellcheck disable=SC2001
-stripped=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g')
+# Strip ANSI codes for position comparison (extglob is on in run_tests)
+stripped=${output//$'\e['*([0-9;])m/}
 pos1=$(echo "$stripped" | grep -n 'File One' | head -1 | cut -d: -f1)
 pos2=$(echo "$stripped" | grep -n 'File Two' | head -1 | cut -d: -f1)
 if [[ -n $pos1 && -n $pos2 ]] && ((pos1 < pos2)); then
@@ -118,21 +118,16 @@ else
 fi
 
 # Error on nonexistent second file
-set +e
-./md2ansi /tmp/md2ansi_multi1.md /nonexistent_file.md >/dev/null 2>&1
-multi_exit=$?
-set -e
+multi_exit=0
+./md2ansi -- "$TEST_TMPDIR"/md2ansi_multi1.md /nonexistent_file.md >/dev/null 2>&1 || multi_exit=$?
 assert_equals "3" "$multi_exit" "Multi-file - nonexistent second file returns exit 3 (not found)"
 
 # State doesn't leak between files (code block in file1 doesn't affect file2)
-printf '```\nunclosed code\n' > /tmp/md2ansi_leak1.md
-echo '# Normal Header' > /tmp/md2ansi_leak2.md
-output=$(./md2ansi /tmp/md2ansi_leak1.md /tmp/md2ansi_leak2.md 2>/dev/null)
+printf '```\nunclosed code\n' > "$TEST_TMPDIR"/md2ansi_leak1.md || assert_fail "Cannot write fixture md2ansi_leak1.md"
+echo '# Normal Header' > "$TEST_TMPDIR"/md2ansi_leak2.md || assert_fail "Cannot write fixture md2ansi_leak2.md"
+output=$(./md2ansi -- "$TEST_TMPDIR"/md2ansi_leak1.md "$TEST_TMPDIR"/md2ansi_leak2.md 2>/dev/null)
 assert_contains "$output" "unclosed code" "Multi-file state leak - file1 code content"
 assert_contains "$output" "Normal Header" "Multi-file state leak - file2 header renders"
-
-# Cleanup temp files
-rm -f /tmp/md2ansi_multi1.md /tmp/md2ansi_multi2.md /tmp/md2ansi_leak1.md /tmp/md2ansi_leak2.md
 
 # ================================================================================
 # 5. Unicode/multibyte in wrapping

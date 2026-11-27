@@ -664,27 +664,27 @@ md2ansi.bash/
 ├── LICENSE               # GPL-3.0 license
 ├── README.md             # This file
 └── test/
-    ├── run_tests              # Test suite runner (181 lines)
-    ├── test_ansi_info.sh      # ansi-info capability report (58 lines)
-    ├── test_basic.sh          # Basic features (128 lines)
-    ├── test_code.sh           # Code blocks (168 lines)
-    ├── test_edge_cases.sh     # Edge cases (208 lines)
-    ├── test_footnotes.sh      # Footnotes (105 lines)
-    ├── test_gaps.sh           # Audit gap coverage (163 lines)
-    ├── test_md.sh             # md pagination wrapper (45 lines)
-    ├── test_md_link_extract.sh # md-link-extract URL extraction (136 lines)
-    ├── test_mdview.sh         # mdview utility tests (173 lines)
-    ├── test_options.sh        # Feature toggles (121 lines)
-    ├── test_security.sh       # Security features (133 lines)
-    ├── test_tables.sh         # Tables (96 lines)
-    └── test_wrapping.sh       # Text wrapping (182 lines)
+    ├── run_tests              # Test suite runner (217 lines)
+    ├── test_ansi_info.sh      # ansi-info capability report (62 lines)
+    ├── test_basic.sh          # Basic features (132 lines)
+    ├── test_code.sh           # Code blocks (172 lines)
+    ├── test_edge_cases.sh     # Edge cases (212 lines)
+    ├── test_footnotes.sh      # Footnotes (109 lines)
+    ├── test_gaps.sh           # Audit gap coverage (158 lines)
+    ├── test_md.sh             # md pagination wrapper (49 lines)
+    ├── test_md_link_extract.sh # md-link-extract URL extraction (141 lines)
+    ├── test_mdview.sh         # mdview utility tests (174 lines)
+    ├── test_options.sh        # Feature toggles (125 lines)
+    ├── test_security.sh       # Security features (139 lines)
+    ├── test_tables.sh         # Tables (100 lines)
+    └── test_wrapping.sh       # Text wrapping (186 lines)
 ```
 
 **Total Project Size:**
 - Main executable: 1,229 lines
 - Utility scripts: 734 lines (md, ansi-info, md-link-extract, mdview)
-- Test suite: 1,897 lines (13 test files + runner)
-- **Total: 3,860 lines**
+- Test suite: 1,976 lines (13 test files + runner)
+- **Total: 3,939 lines**
 
 ### Internal Code Organization
 
@@ -763,44 +763,31 @@ The project includes a comprehensive test suite with 13 test files covering all 
 
 | Test File | Lines | Coverage |
 |:----------|:------|:---------|
-| **run_tests** | 181 | Test runner with assertion framework |
-| **test_ansi_info.sh** | 58 | `ansi-info` four-section capability report, --help/--version, paged output |
-| **test_basic.sh** | 128 | Headers, inline formatting, lists, links, images, horizontal rules |
-| **test_code.sh** | 168 | Fenced code blocks, syntax highlighting, language detection, code fence types |
-| **test_edge_cases.sh** | 208 | Empty files, malformed input, edge cases, error handling |
-| **test_footnotes.sh** | 105 | Footnote references, definitions, ordering, missing definitions |
-| **test_gaps.sh** | 163 | Audit gap coverage, combined flag parsing, fence mismatch handling |
-| **test_md.sh** | 45 | `md` pagination wrapper, its own --help/--version, less flag passthrough |
-| **test_md_link_extract.sh** | 136 | Inline / reference / bare-URL extraction, dedupe, multi-file |
-| **test_mdview.sh** | 173 | mdview CLI options, argument validation, sourced mode, full pipeline |
-| **test_options.sh** | 121 | Feature toggles, --no-* options, plain mode, option combinations |
-| **test_security.sh** | 133 | File size limits, line length limits, input sanitization, pathological regex input |
-| **test_tables.sh** | 96 | Table parsing, alignment (left/center/right), borders, inline formatting in cells |
-| **test_wrapping.sh** | 182 | Text wrapping, ANSI-aware wrapping, terminal width handling |
+| **run_tests** | 217 | Test runner with assertion framework |
+| **test_ansi_info.sh** | 62 | `ansi-info` four-section capability report, --help/--version, paged output |
+| **test_basic.sh** | 132 | Headers, inline formatting, lists, links, images, horizontal rules |
+| **test_code.sh** | 172 | Fenced code blocks, syntax highlighting, language detection, code fence types |
+| **test_edge_cases.sh** | 212 | Empty files, malformed input, edge cases, error handling |
+| **test_footnotes.sh** | 109 | Footnote references, definitions, ordering, missing definitions |
+| **test_gaps.sh** | 158 | Audit gap coverage, combined flag parsing, fence mismatch handling |
+| **test_md.sh** | 49 | `md` pagination wrapper, its own --help/--version, less flag passthrough |
+| **test_md_link_extract.sh** | 141 | Inline / reference / bare-URL extraction, dedupe, multi-file |
+| **test_mdview.sh** | 174 | mdview CLI options, argument validation, sourced mode, full pipeline |
+| **test_options.sh** | 125 | Feature toggles, --no-* options, plain mode, option combinations |
+| **test_security.sh** | 139 | File size limits, line length limits, input sanitization, pathological regex input |
+| **test_tables.sh** | 100 | Table parsing, alignment (left/center/right), borders, inline formatting in cells |
+| **test_wrapping.sh** | 186 | Text wrapping, ANSI-aware wrapping, terminal width handling |
 
-**Total test coverage: 1,897 lines**
+**Total test coverage: 1,976 lines**
 
 ### Running Tests
 
 ```bash
 # Run complete test suite
-./test/run_tests
-
-# Run individual test files
-./test/test_ansi_info.sh
-./test/test_basic.sh
-./test/test_code.sh
-./test/test_edge_cases.sh
-./test/test_footnotes.sh
-./test/test_gaps.sh
-./test/test_md.sh
-./test/test_md_link_extract.sh
-./test/test_mdview.sh
-./test/test_options.sh
-./test/test_security.sh
-./test/test_tables.sh
-./test/test_wrapping.sh
+./test/run_tests        # or: make test
 ```
+
+The `test_*.sh` files are fragments: `run_tests` sources each one in turn, and they rely on its assertion functions and scratch directory. Each refuses to run on its own. A failed assertion does not stop the run; the summary always prints, and `run_tests` exits 1 if any test failed.
 
 ### Test Framework
 
@@ -811,8 +798,17 @@ The test suite uses a simple assertion-based framework:
 assert_equals "expected" "actual" "test name"
 assert_contains "haystack" "needle" "test name"
 assert_not_empty "$value" "test name"
-assert_exit_code 0 "command" "test name"
+
+# Exit codes: the command is an argument list, run without eval, with stdin
+# from /dev/null and its output discarded. Set variables with env.
+assert_exit_code 3 "test name" ./md2ansi /nonexistent.md
+assert_exit_code 0 "test name" env MDVIEW_BROWSER=/bin/true ./mdview README.md
+
+# The same, with the given input on stdin exactly as written (no newline added)
+assert_exit_code_input 0 "test name" $'| A |\n|---|\n| 1 |' ./md2ansi
 ```
+
+Fixture files go in `"$TEST_TMPDIR"`, a private directory `run_tests` makes with `mktemp -d` and removes on exit.
 
 ### Manual Testing
 
@@ -1077,7 +1073,7 @@ A: Yes, pipe from `curl`: `curl -s https://example.com/file.md | md2ansi`
 
 **Q: How do I run the test suite?**
 
-A: Run `./test/run_tests` from the project directory. Individual tests can be run directly: `./test/test_basic.sh`.
+A: Run `./test/run_tests` (or `make test`). The individual `test_*.sh` files are sourced by the runner and cannot be run on their own.
 
 **Q: How do I contribute?**
 

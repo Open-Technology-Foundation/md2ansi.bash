@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Tests for mdview — Markdown viewer wrapper
 # This file is sourced by run_tests
+[[ ${BASH_SOURCE[0]} != "$0" ]] || {
+  >&2 echo "Error: ${0@Q} must be sourced by run_tests"
+  exit 1
+}
 
 test_section "mdview"
 
@@ -12,7 +16,7 @@ test_section "mdview"
 output=$(./mdview --version 2>&1)
 assert_contains "$output" "mdview" "--version contains program name"
 assert_contains "$output" "1.0.1" "--version contains version number"
-assert_exit_code 0 "./mdview --version" "--version exits 0"
+assert_exit_code 0 "--version exits 0" ./mdview --version
 
 # --help
 output=$(./mdview --help 2>&1)
@@ -20,7 +24,7 @@ assert_contains "$output" "Usage:" "--help contains usage line"
 assert_contains "$output" "--theme" "--help documents --theme option"
 assert_contains "$output" "--window-size" "--help documents --window-size option"
 assert_contains "$output" "--browser" "--help documents --browser option"
-assert_exit_code 0 "./mdview --help" "--help exits 0"
+assert_exit_code 0 "--help exits 0" ./mdview --help
 
 # Short flags equivalent to long
 output_V=$(./mdview -V 2>&1)
@@ -33,24 +37,24 @@ assert_contains "$output_h" "Usage:" "-h is equivalent to --help"
 # ================================================================================
 
 # No arguments → exit 2
-assert_exit_code 2 "./mdview 2>&1" "No arguments exits 2"
+assert_exit_code 2 "No arguments exits 2" ./mdview
 
 # Missing file → exit 3 (BCS: file not found)
-assert_exit_code 3 "./mdview /nonexistent/file.md 2>&1" "Nonexistent file exits 3 (not found)"
+assert_exit_code 3 "Nonexistent file exits 3 (not found)" ./mdview /nonexistent/file.md
 
 # Invalid option → exit 22
-assert_exit_code 22 "./mdview --bogus 2>&1" "Invalid option exits 22"
-assert_exit_code 22 "./mdview -z 2>&1" "Invalid short option exits 22"
+assert_exit_code 22 "Invalid option exits 22" ./mdview --bogus
+assert_exit_code 22 "Invalid short option exits 22" ./mdview -z
 
 # Options requiring argument, missing → exit 8 (BCS: required argument missing)
-assert_exit_code 8 "./mdview --theme 2>&1" "--theme without value exits 8 (missing arg)"
-assert_exit_code 8 "./mdview --window-size 2>&1" "--window-size without value exits 8 (missing arg)"
-assert_exit_code 8 "./mdview --browser 2>&1" "--browser without value exits 8 (missing arg)"
+assert_exit_code 8 "--theme without value exits 8 (missing arg)" ./mdview --theme
+assert_exit_code 8 "--window-size without value exits 8 (missing arg)" ./mdview --window-size
+assert_exit_code 8 "--browser without value exits 8 (missing arg)" ./mdview --browser
 
 # Invalid window size format → exit 22
-assert_exit_code 22 "./mdview --window-size bad README.md 2>&1" "Invalid window-size format exits 22"
-assert_exit_code 22 "./mdview --window-size 100 README.md 2>&1" "Window-size missing 'x' exits 22"
-assert_exit_code 22 "./mdview --window-size axb README.md 2>&1" "Non-numeric window-size exits 22"
+assert_exit_code 22 "Invalid window-size format exits 22" ./mdview --window-size bad README.md
+assert_exit_code 22 "Window-size missing 'x' exits 22" ./mdview --window-size 100 README.md
+assert_exit_code 22 "Non-numeric window-size exits 22" ./mdview --window-size axb README.md
 
 # Error messages go to stderr
 stderr=$(./mdview 2>&1 1>/dev/null ||:)
@@ -62,7 +66,7 @@ assert_contains "$stderr" "mdview" "Error message includes program name"
 
 # -tnonexistent parses as -t nonexistent (theme), then /nonexistent is the file
 # File not found → exit 3 (proves stacking parsed -t correctly, not as invalid option)
-assert_exit_code 3 "./mdview -tnonexistent /nonexistent 2>&1" "Stacked -t flag parsed correctly (file error, not option error)"
+assert_exit_code 3 "Stacked -t flag parsed correctly (file error, not option error)" ./mdview -tnonexistent /nonexistent
 
 # ================================================================================
 # Sourced mode tests
@@ -103,9 +107,11 @@ if command -v pandoc &>/dev/null && [[ -d themes ]]; then
 
   # Use /bin/true as browser mock — accepts any args, does nothing
   MDVIEW_TMPDIR=${XDG_RUNTIME_DIR:-"${TMPDIR:-/tmp}"}/mdview
+  # The path comes from the environment; find would read a leading - as an expression
+  [[ $MDVIEW_TMPDIR == /* ]] || MDVIEW_TMPDIR=./$MDVIEW_TMPDIR
 
   # Full pipeline succeeds with mock browser
-  assert_exit_code 0 "MDVIEW_BROWSER=/bin/true ./mdview README.md" "Full pipeline with mock browser exits 0"
+  assert_exit_code 0 "Full pipeline with mock browser exits 0" env MDVIEW_BROWSER=/bin/true ./mdview README.md
 
   # Temp file created in per-session directory
   if [[ -d "$MDVIEW_TMPDIR" ]]; then
@@ -122,38 +128,33 @@ if command -v pandoc &>/dev/null && [[ -d themes ]]; then
   # Temp file contains HTML (spot check)
   tmpfile=$(find "$MDVIEW_TMPDIR" -name 'README.html' -mmin -1 2>/dev/null | head -1)
   if [[ -n "$tmpfile" && -f "$tmpfile" ]]; then
-    content=$(head -5 "$tmpfile")
+    content=$(head -5 -- "$tmpfile")
     assert_contains "$content" "html" "Temp file contains HTML content"
   fi
 
   # Theme override works end-to-end
-  assert_exit_code 0 \
-    "MDVIEW_BROWSER=/bin/true ./mdview --theme github-dark README.md" \
-    "CLI --theme override works"
+  assert_exit_code 0 "CLI --theme override works" \
+    env MDVIEW_BROWSER=/bin/true ./mdview --theme github-dark README.md
 
   # Invalid theme produces config error (not crash)
-  assert_exit_code 19 \
-    "MDVIEW_BROWSER=/bin/true ./mdview --theme nonexistent-theme README.md" \
-    "Invalid theme exits 19 (configuration error)"
+  assert_exit_code 19 "Invalid theme exits 19 (configuration error)" \
+    env MDVIEW_BROWSER=/bin/true ./mdview --theme nonexistent-theme README.md
 
   # Error message for invalid theme is descriptive
   stderr=$(MDVIEW_BROWSER=/bin/true ./mdview --theme nonexistent-theme README.md 2>&1 ||:)
   assert_contains "$stderr" "not found" "Invalid theme error mentions 'not found'"
 
   # Window size override accepted (no crash)
-  assert_exit_code 0 \
-    "MDVIEW_BROWSER=/bin/true ./mdview --window-size 1200x900 README.md" \
-    "CLI --window-size override works"
+  assert_exit_code 0 "CLI --window-size override works" \
+    env MDVIEW_BROWSER=/bin/true ./mdview --window-size 1200x900 README.md
 
   # Browser override accepted
-  assert_exit_code 0 \
-    "MDVIEW_BROWSER=/bin/true ./mdview --browser /bin/true README.md" \
-    "CLI --browser override works"
+  assert_exit_code 0 "CLI --browser override works" \
+    env MDVIEW_BROWSER=/bin/true ./mdview --browser /bin/true README.md
 
   # -- separator works
-  assert_exit_code 0 \
-    "MDVIEW_BROWSER=/bin/true ./mdview -- README.md" \
-    "Double-dash separator works"
+  assert_exit_code 0 "Double-dash separator works" \
+    env MDVIEW_BROWSER=/bin/true ./mdview -- README.md
 
   # No EXIT trap after full pipeline run (sourced mode)
   output=$(bash -c '

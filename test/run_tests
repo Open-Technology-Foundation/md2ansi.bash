@@ -2,6 +2,9 @@
 # Test suite for md2ansi Bash implementation
 # Simple, safe testing framework with no external dependencies
 set -euo pipefail
+shopt -s inherit_errexit shift_verbose extglob nullglob
+
+declare -rx PATH=/usr/local/bin:/usr/bin:/bin
 
 # Script metadata
 SCRIPT_PATH=$(readlink -en -- "$0")
@@ -16,6 +19,17 @@ declare -i TESTS_RUN=0 TESTS_PASSED=0 TESTS_FAILED=0
 declare -- GREEN=$'\033[0;32m' RED=$'\033[0;31m' YELLOW=$'\033[0;33m'
 declare -- CYAN=$'\033[0;36m' NC=$'\033[0m'
 readonly -- GREEN RED YELLOW CYAN NC
+
+# Scratch directory for test fixtures: main() creates it, cleanup() removes it
+declare -- TEST_TMPDIR=''
+
+cleanup() {
+  local -i exitcode=${1:-$?}
+  trap - EXIT
+  [[ -z $TEST_TMPDIR ]] || rm -rf -- "$TEST_TMPDIR"
+  exit "$exitcode"
+}
+trap 'cleanup $?' EXIT
 
 # --------------------------------------------------------------------------------
 # Test assertion functions
@@ -78,19 +92,12 @@ assert_not_empty() {
   fi
 }
 
-assert_exit_code() {
-  local -i expected_code="$1"
-  local -- command="$2"
-  local -- test_name="${3:-assertion}"
-  local -i actual_code
+# Record the result of an exit-code assertion
+check_exit_code() {
+  local -i expected_code=$1 actual_code=$2
+  local -- test_name=$3
 
   TESTS_RUN+=1
-
-  # Run command and capture exit code
-  set +e
-  eval "$command" >/dev/null 2>&1
-  actual_code=$?
-  set -e
 
   if ((expected_code == actual_code)); then
     TESTS_PASSED+=1
@@ -103,6 +110,31 @@ assert_exit_code() {
     echo "  Actual exit code:   $actual_code"
     return 1
   fi
+}
+
+# assert_exit_code EXPECTED NAME COMMAND [ARG...]
+# Runs COMMAND as an argument list, not through eval: there is no shell syntax,
+# so set a variable with env VAR=value. Stdin is /dev/null; output is discarded.
+assert_exit_code() {
+  local -i expected_code=$1 actual_code=0
+  local -- test_name=$2
+  shift 2
+
+  "$@" </dev/null >/dev/null 2>&1 || actual_code=$?
+  check_exit_code "$expected_code" "$actual_code" "$test_name"
+}
+
+# assert_exit_code_input EXPECTED NAME INPUT COMMAND [ARG...]
+# As assert_exit_code, with INPUT on stdin exactly as given (no newline added).
+# A process substitution, not a pipe: under pipefail, printf hitting a command
+# that exits unread would make the status a race.
+assert_exit_code_input() {
+  local -i expected_code=$1 actual_code=0
+  local -- test_name=$2 input=$3
+  shift 3
+
+  "$@" < <(printf '%s' "$input") >/dev/null 2>&1 || actual_code=$?
+  check_exit_code "$expected_code" "$actual_code" "$test_name"
 }
 
 assert_pass() {
@@ -142,8 +174,12 @@ main() {
   echo "${YELLOW}╚════════════════════════════════════════════════════════════╝${NC}"
   echo ""
 
-  # Change to project directory
-  cd "$PROJECT_DIR"
+  # Every test calls ./md2ansi, ./md etc. relative to the project directory
+  cd -- "$PROJECT_DIR" || { echo "${RED}✗${NC} Cannot enter ${PROJECT_DIR@Q}" >&2; return 3; }
+
+  TEST_TMPDIR=$(mktemp -d --tmpdir -- md2ansi-tests.XXXXXX) \
+      || { echo "${RED}✗${NC} Cannot create a temp directory" >&2; return 5; }
+  readonly -- TEST_TMPDIR
 
   # Source test files
   local -- test_file
